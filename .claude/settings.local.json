@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bash setup.sh)",
+      "Bash(curl -s -H \"User-Agent: iChords/1.0\" \"https://www.songsterr.com/api/songs?pattern=wonderwall\")",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s -H \"User-Agent: iChords/1.0\" \"https://www.songsterr.com/api/songs?pattern=pearl+jam+black\")",
+      "Bash(curl -s -H \"User-Agent: iChords/1.0\" \"https://www.songsterr.com/api/chords/15712\")",
+      "Bash(curl -s -H \"User-Agent: iChords/1.0\" \"https://www.songsterr.com/chordpro/15712/15712/-Znt0tMAkdJY4h-yIwTcd.chordpro\")",
+      "Bash(curl -s \"https://chordpro2.songsterr.com/15712/15712/-Znt0tMAkdJY4h-yIwTcd.chordpro\")",
+      "Bash(curl -s --compressed \"https://chordpro2.songsterr.com/15712/15712/-Znt0tMAkdJY4h-yIwTcd.chordpro\")",
+      "Bash(xcodegen generate:*)",
+      "Bash(xcodebuild -project /Users/grant/git/iChords/iChords.xcodeproj -scheme iChords -destination 'platform=iOS Simulator,name=iPhone 16' build)",
+      "Bash(osascript:*)",
+      "Bash(swift:*)"
+    ]
+  }
+}
