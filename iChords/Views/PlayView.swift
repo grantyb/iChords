@@ -616,6 +616,7 @@ struct PlayView: View {
     private func duplicateEditableLine(id: UUID) {
         guard let idx = editableLines.firstIndex(where: { $0.id == id }) else { return }
         editableLines.insert(EditableLine(text: editableLines[idx].text), at: idx + 1)
+        ensureTabGroupSpacing()
         saveImmediately()
     }
 
