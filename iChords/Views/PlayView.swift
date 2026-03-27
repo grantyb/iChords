@@ -15,7 +15,8 @@ struct PlayView: View {
     @State private var wasPlayingBeforeScroll = false
     @State private var scrollProxy: ScrollViewProxy?
     @State private var linePositions: [Int: CGFloat] = [:]
-    @State private var scrollViewCenter: CGFloat = 0
+    @State private var scrollViewCenter: CGFloat = UIScreen.main.bounds.height * 0.5
+    @State private var heroHeight: CGFloat = 0
 
     // Edit mode
     @State private var isEditing = false
@@ -153,6 +154,9 @@ struct PlayView: View {
             .onPreferenceChange(LinePositionKey.self) { positions in
                 linePositions = positions
             }
+            .onPreferenceChange(HeroHeightKey.self) { h in
+                heroHeight = h
+            }
             .overlay(
                 GeometryReader { geo in
                     TouchInterceptView(
@@ -188,7 +192,8 @@ struct PlayView: View {
         }
     }
 
-    // Finds the SongLine closest to the playback anchor and updates the engine cursor live.
+    // Finds the uppermost SongLine at or below the playback anchor and updates the engine cursor live.
+    // Falls back to the last chord line above the anchor when scrolled past all content.
     private func updateLiveCursor() {
         guard !linePositions.isEmpty else { return }
         let anchor = scrollViewCenter
@@ -197,9 +202,18 @@ struct PlayView: View {
         )
         let chordPositions = linePositions.filter { chordLineIndices.contains($0.key) }
         guard !chordPositions.isEmpty else { return }
-        guard let (slIdx, _) = chordPositions.min(by: { abs($0.value - anchor) < abs($1.value - anchor) }),
-              slIdx != engine.activeSongLineIndex
-        else { return }
+
+        let slIdx: Int
+        let atOrBelow = chordPositions.filter { $0.value >= anchor }
+        if let (idx, _) = atOrBelow.min(by: { $0.value < $1.value }) {
+            slIdx = idx
+        } else if let (idx, _) = chordPositions.max(by: { $0.value < $1.value }) {
+            slIdx = idx
+        } else {
+            return
+        }
+
+        guard slIdx != engine.activeSongLineIndex else { return }
         engine.seek(toLine: slIdx)
     }
 
@@ -266,10 +280,20 @@ struct PlayView: View {
         .clipped()
         .cornerRadius(10, corners: [.bottomLeft, .bottomRight])
         .padding(.bottom, 12)
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(key: HeroHeightKey.self, value: geo.size.height)
+            }
+        )
     }
 
     @ViewBuilder
     private func songLines(_ parsed: ParsedSong) -> some View {
+        // Ensure the first song line sits at the vertical centre when scrolled all the way to the top.
+        let topPad = max(0, scrollViewCenter - heroHeight)
+        if topPad > 0 {
+            Color.clear.frame(height: topPad)
+        }
         ForEach(Array(parsed.lines.enumerated()), id: \.offset) { lineIdx, line in
             songLineView(lineIdx: lineIdx, line: line, parsed: parsed)
         }
@@ -792,6 +816,13 @@ struct LinePositionKey: PreferenceKey {
     nonisolated(unsafe) static var defaultValue: [Int: CGFloat] = [:]
     static func reduce(value: inout [Int: CGFloat], nextValue: () -> [Int: CGFloat]) {
         value.merge(nextValue()) { _, new in new }
+    }
+}
+
+struct HeroHeightKey: PreferenceKey {
+    nonisolated(unsafe) static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 
