@@ -191,17 +191,6 @@ struct PlayView: View {
 
     private func heroSection(_ parsed: ParsedSong) -> some View {
         ZStack(alignment: .bottomLeading) {
-            if let url = song.artworkUrl, let imageUrl = URL(string: url) {
-                AsyncImage(url: imageUrl) { image in
-                    image.resizable().aspectRatio(contentMode: .fill)
-                } placeholder: { Color.clear }
-                    .frame(height: 180)
-                    .clipped()
-                    .blur(radius: 30)
-                    .brightness(-0.4)
-                    .scaleEffect(1.2)
-            }
-
             LinearGradient(
                 colors: [Theme.bg.opacity(0.3), Theme.bg.opacity(0.85)],
                 startPoint: .top,
@@ -249,9 +238,19 @@ struct PlayView: View {
             .padding(16)
         }
         .frame(maxWidth: .infinity)
+        .background {
+            if let url = song.artworkUrl, let imageUrl = URL(string: url) {
+                AsyncImage(url: imageUrl) { image in
+                    image.resizable().aspectRatio(contentMode: .fill)
+                } placeholder: { Color.clear }
+                    .blur(radius: 30)
+                    .brightness(-0.4)
+                    .scaleEffect(1.2)
+                    .clipped()
+            }
+        }
         .clipped()
         .cornerRadius(10, corners: [.bottomLeft, .bottomRight])
-        .padding(.bottom, 12)
     }
 
     @ViewBuilder
@@ -510,7 +509,7 @@ struct PlayView: View {
         }
         .padding(.horizontal, 10)
         .padding(.top, 10)
-        .padding(.bottom, 10)
+        .padding(.bottom, 0)
         .background {
             Theme.surface.ignoresSafeArea(edges: .bottom)
         }
