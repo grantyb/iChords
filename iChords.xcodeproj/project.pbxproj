@@ -10,6 +10,7 @@
 		03853FBD2E8B34D85DC79187 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 580A9F946CDAD0E6D407B8E7 /* Theme.swift */; };
 		1EBF9D5C0A1AD4A959DD3A75 /* PlaybackEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99BA19817F4C94C6A82560F7 /* PlaybackEngine.swift */; };
 		2D077CD304D6690DF682382B /* Song.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4AD3ECD9877DAEC078B026 /* Song.swift */; };
+		31DC1B7662D583864DC8BC2F /* SongLine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43FC92B0C60D2365E4232BD2 /* SongLine.swift */; };
 		34764EA8901A1EE427E8794D /* SongsterrService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 569BDECE6613E034C02DFCAC /* SongsterrService.swift */; };
 		35CE87A40F76928131AFFDB6 /* ChordsTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22DE5D443B37FD21E2B12F8 /* ChordsTextEditor.swift */; };
 		44E1ED6943948D8E85EC95A1 /* ChordProParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F4F3C3DCB1EF5445F7AE0A8 /* ChordProParser.swift */; };
@@ -26,17 +27,20 @@
 		DED990E01FA14C033EC3E869 /* ChordVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = F33383034C7BE2FECDB95DC0 /* ChordVersion.swift */; };
 		E8B31532875A18A632FFDFE2 /* ITunesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 760C91C06D6C251FEAE1AD21 /* ITunesService.swift */; };
 		F911CD2D7240F2135B809B45 /* TouchInterceptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67B2D483305204E2C9EE8F47 /* TouchInterceptView.swift */; };
+		FB85A4F2D5FDDF5DA7631FBA /* SongLineBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31EF2410AE1E6282D567E5EE /* SongLineBuilder.swift */; };
 		FF0B14F964CE355D1D70EBC3 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F8D78D9FFF7EC909B21448 /* ContentView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		22AC75E68A372328D03D4DA0 /* RecentSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentSearch.swift; sourceTree = "<group>"; };
 		2F4AD3ECD9877DAEC078B026 /* Song.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Song.swift; sourceTree = "<group>"; };
+		31EF2410AE1E6282D567E5EE /* SongLineBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongLineBuilder.swift; sourceTree = "<group>"; };
+		43FC92B0C60D2365E4232BD2 /* SongLine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongLine.swift; sourceTree = "<group>"; };
 		4FFD3EEDF3DBEBBEC770582C /* iChordsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iChordsApp.swift; sourceTree = "<group>"; };
 		569BDECE6613E034C02DFCAC /* SongsterrService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongsterrService.swift; sourceTree = "<group>"; };
 		580A9F946CDAD0E6D407B8E7 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		67B2D483305204E2C9EE8F47 /* TouchInterceptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchInterceptView.swift; sourceTree = "<group>"; };
-		690ED3ABE593D7C9C90E7625 /* iChords.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = iChords.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		690ED3ABE593D7C9C90E7625 /* iChords.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = iChords.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6F4F3C3DCB1EF5445F7AE0A8 /* ChordProParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChordProParser.swift; sourceTree = "<group>"; };
 		760C91C06D6C251FEAE1AD21 /* ITunesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ITunesService.swift; sourceTree = "<group>"; };
 		804E700274BACB2748FF8897 /* SchemaVersions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchemaVersions.swift; sourceTree = "<group>"; };
@@ -94,6 +98,7 @@
 				22AC75E68A372328D03D4DA0 /* RecentSearch.swift */,
 				804E700274BACB2748FF8897 /* SchemaVersions.swift */,
 				2F4AD3ECD9877DAEC078B026 /* Song.swift */,
+				43FC92B0C60D2365E4232BD2 /* SongLine.swift */,
 				EDB22E1E8F2E996BB980678B /* SongResult.swift */,
 			);
 			path = Models;
@@ -120,6 +125,7 @@
 			isa = PBXGroup;
 			children = (
 				6F4F3C3DCB1EF5445F7AE0A8 /* ChordProParser.swift */,
+				31EF2410AE1E6282D567E5EE /* SongLineBuilder.swift */,
 			);
 			path = ChordPro;
 			sourceTree = "<group>";
@@ -165,9 +171,10 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 2640;
+				LastUpgradeCheck = 1600;
 				TargetAttributes = {
 					5B3A4DA0F69EC7A6A5665E60 = {
+						DevelopmentTeam = DKW9QGFSBH;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -221,6 +228,8 @@
 				C1F4307152A9787756F75B4B /* SchemaVersions.swift in Sources */,
 				4EA963102DB957AE3578B6B0 /* SearchView.swift in Sources */,
 				2D077CD304D6690DF682382B /* Song.swift in Sources */,
+				31DC1B7662D583864DC8BC2F /* SongLine.swift in Sources */,
+				FB85A4F2D5FDDF5DA7631FBA /* SongLineBuilder.swift in Sources */,
 				5908188A3D9917F72E0C541F /* SongResult.swift in Sources */,
 				34764EA8901A1EE427E8794D /* SongsterrService.swift in Sources */,
 				03853FBD2E8B34D85DC79187 /* Theme.swift in Sources */,
@@ -267,10 +276,8 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = B35KKCQC55;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -291,7 +298,6 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6.0;
@@ -333,10 +339,8 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = B35KKCQC55;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -350,7 +354,6 @@
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 6.0;
@@ -365,6 +368,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = DKW9QGFSBH;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
@@ -388,6 +392,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = DKW9QGFSBH;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
