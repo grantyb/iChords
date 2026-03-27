@@ -437,7 +437,7 @@ struct PlayView: View {
     }
 
     private var controls: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             Button {
                 engine.skipBack()
                 scrollToLine(engine.activeSongLineIndex)
@@ -477,7 +477,7 @@ struct PlayView: View {
                     .background(Circle().stroke(Theme.surface2, lineWidth: 1))
             }
 
-            Spacer().frame(width: 4)
+            Spacer()
 
             HStack(spacing: 6) {
                 Button {
@@ -486,7 +486,7 @@ struct PlayView: View {
                     Image(systemName: "minus")
                         .font(.caption)
                         .foregroundColor(Theme.text)
-                        .frame(width: 36, height: 36)
+                        .frame(width: 32, height: 32)
                         .background(Circle().stroke(Theme.surface2, lineWidth: 1))
                 }
 
@@ -494,7 +494,7 @@ struct PlayView: View {
                     .font(.caption)
                     .foregroundColor(Theme.textDim)
                     .monospacedDigit()
-                    .frame(minWidth: 40)
+                    .frame(minWidth: 36)
 
                 Button {
                     engine.speed = min(5.0, (engine.speed * 100 + 5).rounded() / 100)
@@ -502,12 +502,12 @@ struct PlayView: View {
                     Image(systemName: "plus")
                         .font(.caption)
                         .foregroundColor(Theme.text)
-                        .frame(width: 36, height: 36)
+                        .frame(width: 32, height: 32)
                         .background(Circle().stroke(Theme.surface2, lineWidth: 1))
                 }
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 10)
         .padding(.vertical, 10)
         .background(Theme.surface)
         .overlay(alignment: .top) {
