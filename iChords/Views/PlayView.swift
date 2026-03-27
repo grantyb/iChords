@@ -301,12 +301,24 @@ struct PlayView: View {
                 }
             } else if isProse {
                 proseLine(line)
-            } else if line.chunks.isEmpty {
-                Spacer().frame(height: 16)
             } else {
                 chordLine(chunks: line.chunks, chordStartIndex: sl.chordStartIndex, isActiveLine: isActive)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 2)
+        .padding(.leading, 13)   // 3 pt gutter for bar + 10 pt content margin
+        .padding(.trailing, 10)
+        .background(
+            HStack(spacing: 0) {
+                Rectangle()
+                    .fill(isActive ? Theme.accent : .clear)
+                    .frame(width: 3)
+                Rectangle()
+                    .fill(isActive ? Theme.accent.opacity(0.06) : .clear)
+            }
+        )
+        .cornerRadius(4)
         .id("songline-\(slIdx)")
         .contentShape(Rectangle())
         .background(
@@ -345,8 +357,6 @@ struct PlayView: View {
     private func tabLine(_ line: ChordProLine) -> some View {
         let text = line.chunks.first?.lyric ?? ""
         return TabLineView(text: text, activeColumn: 0)
-            .padding(.leading, 20)
-            .padding(.trailing, 12)
     }
 
     private func proseLine(_ line: ChordProLine) -> some View {
@@ -354,8 +364,6 @@ struct PlayView: View {
         return Text(text)
             .font(.subheadline)
             .foregroundColor(Theme.textDim)
-            .padding(.vertical, 2)
-            .padding(.horizontal, 16)
     }
 
     private struct WordItem: Identifiable {
@@ -426,22 +434,6 @@ struct PlayView: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 2)
-        .padding(.leading, 6)
-        .padding(.horizontal, 10)
-        .background(
-            HStack(spacing: 0) {
-                if isActiveLine {
-                    Rectangle()
-                        .fill(Theme.accent)
-                        .frame(width: 3)
-                }
-                Rectangle()
-                    .fill(isActiveLine ? Theme.accent.opacity(0.06) : .clear)
-            }
-        )
-        .cornerRadius(4)
     }
 
     private var controls: some View {
