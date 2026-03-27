@@ -1,91 +1,70 @@
 import Foundation
-import Combine
-
-struct ChordTiming {
-    let flatIndex: Int
-    let lineIndex: Int
-    let wordCount: Int
-}
 
 @MainActor
 @Observable
 final class PlaybackEngine {
     var isPlaying = false
-    var activeChordIndex = 0
-    var activeLineIndex = -1
+    var activeSongLineIndex = 0
+    var activeBeatIndex = 0   // index into the current SongLine's beats array
     var speed: Double = 1.0
 
-    private(set) var chordTimings: [ChordTiming] = []
-    private(set) var paragraphStarts: [Int] = []
+    private(set) var songLines: [SongLine] = []
+    private(set) var paragraphStarts: [Int] = []  // SongLine indices that begin a paragraph
 
     private var elapsed: TimeInterval = 0
     private var playTask: Task<Void, Never>?
 
-    var totalChords: Int { chordTimings.count }
+    var totalLines: Int { songLines.count }
 
-    func configure(song: ParsedSong) {
-        var timings: [ChordTiming] = []
-        var paragraphs: [Int] = [0]
-        var flatIdx = 0
+    /// Flat chord index for the chord currently being highlighted, or -1 if none.
+    var activeFlatChordIndex: Int {
+        guard !songLines.isEmpty, activeSongLineIndex < songLines.count else { return -1 }
+        let sl = songLines[activeSongLineIndex]
+        guard activeBeatIndex < sl.beats.count else { return -1 }
+        let beat = sl.beats[activeBeatIndex]
+        guard beat.index > 0 else { return -1 }
+        return sl.chordStartIndex + beat.index - 1
+    }
+
+    /// Index into `parsed.lines` of the active SongLine's first parsed row (for scrolling).
+    var activeParsedLineIndex: Int {
+        guard !songLines.isEmpty, activeSongLineIndex < songLines.count else { return -1 }
+        return songLines[activeSongLineIndex].parsedLineIndex
+    }
+
+    func configure(lines: [SongLine]) {
+        var paragraphs: [Int] = []
         var inParagraph = false
 
-        for (lineIdx, line) in song.lines.enumerated() {
-            let isLyricLine = line.type == .line && !line.chunks.isEmpty
-            let hasChords = isLyricLine && line.chunks.contains { $0.chord != nil }
-
-            if isLyricLine && hasChords {
+        for (idx, line) in lines.enumerated() {
+            let hasChords = line.beats.contains { $0.index > 0 }
+            if hasChords {
                 if !inParagraph {
-                    paragraphs.append(flatIdx)
+                    paragraphs.append(idx)
                     inParagraph = true
-                }
-                for chunk in line.chunks where chunk.chord != nil {
-                    let words = chunk.lyric
-                        .trimmingCharacters(in: .whitespaces)
-                        .split(separator: " ")
-                        .filter { !$0.isEmpty }
-                    timings.append(ChordTiming(
-                        flatIndex: flatIdx,
-                        lineIndex: lineIdx,
-                        wordCount: max(1, words.count)
-                    ))
-                    flatIdx += 1
                 }
             } else {
                 inParagraph = false
-                if isLyricLine {
-                    for chunk in line.chunks where chunk.chord != nil {
-                        timings.append(ChordTiming(
-                            flatIndex: flatIdx,
-                            lineIndex: lineIdx,
-                            wordCount: 1
-                        ))
-                        flatIdx += 1
-                    }
-                }
             }
         }
 
-        chordTimings = timings
-        paragraphStarts = Array(Set(paragraphs)).sorted()
-        activeChordIndex = 0
-        activeLineIndex = timings.first?.lineIndex ?? -1
+        songLines = lines
+        paragraphStarts = paragraphs.isEmpty ? (lines.isEmpty ? [] : [0]) : paragraphs
+        activeSongLineIndex = 0
+        activeBeatIndex = 0
         elapsed = 0
     }
 
     func togglePlay() {
-        if isPlaying {
-            pause()
-        } else {
-            play()
-        }
+        isPlaying ? pause() : play()
     }
 
     func play() {
-        guard !chordTimings.isEmpty else { return }
+        guard !songLines.isEmpty else { return }
         isPlaying = true
         elapsed = 0
         playTask = Task {
-            let interval: UInt64 = 1_000_000_000 / 30 // ~33ms
+            let interval: UInt64 = 1_000_000_000 / 30  // ~33 ms
             while !Task.isCancelled && isPlaying {
                 try? await Task.sleep(nanoseconds: interval)
                 tick()
@@ -99,55 +78,58 @@ final class PlaybackEngine {
         playTask = nil
     }
 
-    func seek(to chordIndex: Int) {
-        let clamped = max(0, min(chordIndex, totalChords - 1))
-        activeChordIndex = clamped
-        activeLineIndex = chordTimings.isEmpty ? -1 : chordTimings[clamped].lineIndex
+    func seek(toLine lineIndex: Int) {
+        guard !songLines.isEmpty else { return }
+        let clamped = max(0, min(lineIndex, totalLines - 1))
+        activeSongLineIndex = clamped
+        activeBeatIndex = 0
         elapsed = 0
     }
 
     func skipForward() {
-        let current = activeChordIndex
+        let current = activeSongLineIndex
         if let next = paragraphStarts.first(where: { $0 > current }) {
-            seek(to: next)
-        } else if totalChords > 0 {
-            seek(to: totalChords - 1)
+            seek(toLine: next)
+        } else if totalLines > 0 {
+            seek(toLine: totalLines - 1)
         }
     }
 
     func skipBack() {
-        let current = activeChordIndex
-        var prev = 0
+        let current = activeSongLineIndex
+        var prev = paragraphStarts.first ?? 0
         for s in paragraphStarts {
             if s >= current { break }
             prev = s
         }
-        seek(to: prev)
+        seek(toLine: prev)
     }
 
     func reset() {
         pause()
-        activeChordIndex = 0
-        activeLineIndex = chordTimings.first?.lineIndex ?? -1
+        activeSongLineIndex = 0
+        activeBeatIndex = 0
         elapsed = 0
     }
 
     private func tick() {
-        guard !chordTimings.isEmpty else { return }
+        guard !songLines.isEmpty, activeSongLineIndex < songLines.count else { return }
         elapsed += 1.0 / 30.0
 
-        let timing = chordTimings[activeChordIndex]
-        let baseDuration = max(0.5, Double(timing.wordCount) * 0.35)
-        let duration = baseDuration / speed
+        let sl = songLines[activeSongLineIndex]
+        let beat = sl.beats[activeBeatIndex]
+        let durationSec = Double(beat.durationMs) / 1000.0 / speed
 
-        if elapsed >= duration {
-            if activeChordIndex < totalChords - 1 {
-                activeChordIndex += 1
-                activeLineIndex = chordTimings[activeChordIndex].lineIndex
-                elapsed = 0
-            } else {
-                pause()
-            }
+        guard elapsed >= durationSec else { return }
+        elapsed = 0
+
+        if activeBeatIndex < sl.beats.count - 1 {
+            activeBeatIndex += 1
+        } else if activeSongLineIndex < totalLines - 1 {
+            activeSongLineIndex += 1
+            activeBeatIndex = 0
+        } else {
+            pause()
         }
     }
 }
