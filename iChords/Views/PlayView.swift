@@ -307,8 +307,7 @@ struct PlayView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 2)
-        .padding(.leading, 13)   // 3 pt gutter for bar + 10 pt content margin
-        .padding(.trailing, 10)
+        .padding(.leading, 6)    // 3 pt bar area + 3 pt gap between bar and content
         .background(
             HStack(spacing: 0) {
                 Rectangle()
@@ -319,6 +318,7 @@ struct PlayView: View {
             }
         )
         .cornerRadius(4)
+        .padding(.horizontal, 10) // outer screen margin — outside the background
         .id("songline-\(slIdx)")
         .contentShape(Rectangle())
         .background(
