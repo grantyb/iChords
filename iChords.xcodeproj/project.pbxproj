@@ -36,7 +36,7 @@
 		569BDECE6613E034C02DFCAC /* SongsterrService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongsterrService.swift; sourceTree = "<group>"; };
 		580A9F946CDAD0E6D407B8E7 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		67B2D483305204E2C9EE8F47 /* TouchInterceptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchInterceptView.swift; sourceTree = "<group>"; };
-		690ED3ABE593D7C9C90E7625 /* iChords.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = iChords.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		690ED3ABE593D7C9C90E7625 /* iChords.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = iChords.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6F4F3C3DCB1EF5445F7AE0A8 /* ChordProParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChordProParser.swift; sourceTree = "<group>"; };
 		760C91C06D6C251FEAE1AD21 /* ITunesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ITunesService.swift; sourceTree = "<group>"; };
 		804E700274BACB2748FF8897 /* SchemaVersions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchemaVersions.swift; sourceTree = "<group>"; };
@@ -168,7 +168,6 @@
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
 					5B3A4DA0F69EC7A6A5665E60 = {
-						DevelopmentTeam = DKW9QGFSBH;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -360,7 +359,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = DKW9QGFSBH;
+				DEVELOPMENT_TEAM = B35KKCQC55;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
@@ -384,7 +383,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = DKW9QGFSBH;
+				DEVELOPMENT_TEAM = B35KKCQC55;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
