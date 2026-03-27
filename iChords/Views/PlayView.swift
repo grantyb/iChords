@@ -94,7 +94,7 @@ struct PlayView: View {
             appState.activeSongLineIndex = newIdx
         }
         .sheet(isPresented: $state.showEditSheet) {
-            EditChordsView(song: song) { _ in
+            EditSongLinesView(song: song) { _ in
                 reloadParsedSong()
             }
         }
@@ -251,6 +251,7 @@ struct PlayView: View {
         }
         .clipped()
         .cornerRadius(10, corners: [.bottomLeft, .bottomRight])
+        .padding(.bottom, 12)
     }
 
     @ViewBuilder
