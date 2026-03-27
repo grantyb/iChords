@@ -509,8 +509,11 @@ struct PlayView: View {
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 10)
-        .background(Theme.surface)
+        .padding(.top, 10)
+        .padding(.bottom, 10)
+        .background {
+            Theme.surface.ignoresSafeArea(edges: .bottom)
+        }
         .overlay(alignment: .top) {
             Rectangle().fill(Theme.surface2).frame(height: 1)
         }
