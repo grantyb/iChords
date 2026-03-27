@@ -17,6 +17,11 @@ struct PlayView: View {
     @State private var linePositions: [Int: CGFloat] = [:]
     @State private var scrollViewCenter: CGFloat = 0
 
+    // Edit mode
+    @State private var isEditing = false
+    @State private var editableLines: [EditableLine] = []
+    @State private var editingLine: EditableLine? = nil
+
     // Lookup tables built from SongLines during loadSong()
     @State private var parsedToSongLine: [Int: Int] = [:]   // parsedLineIndex → songLineIndex
     @State private var skippedParsedLines: Set<Int> = []    // secondary lines in tab groups
@@ -25,11 +30,14 @@ struct PlayView: View {
     private let playbackAnchorFraction: CGFloat = 0.5
 
     var body: some View {
-        @Bindable var state = appState
         VStack(spacing: 0) {
             if let parsed = parsedSong {
-                songContent(parsed)
-                controls
+                if isEditing {
+                    editModeContent(parsed)
+                } else {
+                    songContent(parsed)
+                    controls
+                }
             } else {
                 ProgressView("Loading...")
                     .foregroundColor(Theme.textDim)
@@ -62,11 +70,10 @@ struct PlayView: View {
             }
             ToolbarItemGroup(placement: .navigationBarTrailing) {
                 Button {
-                    appState.showEditSheet = true
-                    appState.save()
+                    toggleEditMode()
                 } label: {
-                    Image(systemName: "pencil")
-                        .foregroundColor(Theme.textDim)
+                    Image(systemName: isEditing ? "pencil.slash" : "pencil")
+                        .foregroundColor(isEditing ? Theme.accent : Theme.textDim)
                 }
                 Button { song.toggleFavourite() } label: {
                     Image(systemName: song.isFavourite ? "heart.fill" : "heart")
@@ -89,14 +96,21 @@ struct PlayView: View {
             engine.pause()
             appState.activeSongLineIndex = engine.activeSongLineIndex
             appState.save()
+            isEditing = false
         }
         .onChange(of: engine.activeSongLineIndex) { _, newIdx in
             appState.activeSongLineIndex = newIdx
         }
-        .sheet(isPresented: $state.showEditSheet) {
-            EditSongLinesView(song: song) { _ in
-                reloadParsedSong()
-            }
+        .sheet(item: $editingLine) { line in
+            let chords = editableLines.map(\.text).joined(separator: "\n")
+            LineEditorModal(
+                line: line,
+                uniqueChords: ChordProParser.uniqueChords(in: ChordProParser.parse(chords)),
+                onSave: { newText in
+                    updateEditableLine(id: line.id, text: newText)
+                    saveImmediately()
+                }
+            )
         }
         .onChange(of: engine.speed) { _, newSpeed in
             song.speed = newSpeed
@@ -549,6 +563,191 @@ struct PlayView: View {
         engine.reset()
         song.linesData = nil   // force rebuild of SongLines from updated chords
         loadSong()
+    }
+
+    // MARK: - Edit mode
+
+    private func toggleEditMode() {
+        if isEditing {
+            isEditing = false
+            reloadParsedSong()
+        } else {
+            engine.pause()
+            loadEditableLines()
+            isEditing = true
+        }
+    }
+
+    private func loadEditableLines() {
+        let rawLines = song.chords.components(separatedBy: "\n")
+        var result: [EditableLine] = []
+        var i = 0
+        while i < rawLines.count {
+            if isTabRawLine(rawLines[i]) {
+                var j = i + 1
+                while j < rawLines.count && isTabRawLine(rawLines[j]) { j += 1 }
+                result.append(EditableLine(text: rawLines[i..<j].joined(separator: "\n")))
+                i = j
+            } else {
+                result.append(EditableLine(text: rawLines[i]))
+                i += 1
+            }
+        }
+        editableLines = result
+    }
+
+    private func saveImmediately() {
+        let text = editableLines.map(\.text).joined(separator: "\n")
+        song.chords = text
+        song.linesData = nil
+        ChordVersion.saveNewVersion(for: song, text: text, context: modelContext)
+    }
+
+    private func updateEditableLine(id: UUID, text: String) {
+        guard let idx = editableLines.firstIndex(where: { $0.id == id }) else { return }
+        editableLines[idx].text = text
+    }
+
+    private func deleteEditableLine(id: UUID) {
+        editableLines.removeAll { $0.id == id }
+        saveImmediately()
+    }
+
+    private func duplicateEditableLine(id: UUID) {
+        guard let idx = editableLines.firstIndex(where: { $0.id == id }) else { return }
+        editableLines.insert(EditableLine(text: editableLines[idx].text), at: idx + 1)
+        saveImmediately()
+    }
+
+    private func moveEditableLines(from: IndexSet, to: Int) {
+        editableLines.move(fromOffsets: from, toOffset: to)
+        saveImmediately()
+    }
+
+    // MARK: - Edit mode views
+
+    private func editModeContent(_ parsed: ParsedSong) -> some View {
+        List {
+            heroSection(parsed)
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+
+            ForEach(editableLines) { line in
+                editModeRow(line)
+            }
+            .onMove { from, to in moveEditableLines(from: from, to: to) }
+
+            Color.clear.frame(height: 40)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+        }
+        .listStyle(.plain)
+        .background(Theme.bg)
+        .scrollContentBackground(.hidden)
+        .environment(\.editMode, .constant(.active))
+    }
+
+    @ViewBuilder
+    private func editModeRow(_ line: EditableLine) -> some View {
+        editModeRowContent(line: line)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture { editingLine = line }
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                Button(role: .destructive) {
+                    deleteEditableLine(id: line.id)
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+                Button {
+                    duplicateEditableLine(id: line.id)
+                } label: {
+                    Label("Duplicate", systemImage: "plus.square.on.square")
+                }
+                .tint(.indigo)
+            }
+    }
+
+    @ViewBuilder
+    private func editModeRowContent(line: EditableLine) -> some View {
+        let trimmed = line.text.trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty {
+            HStack(spacing: 6) {
+                Image(systemName: "return")
+                    .font(.caption2)
+                    .foregroundColor(Theme.surface2)
+                Text("blank line")
+                    .font(.caption2)
+                    .foregroundColor(Theme.surface2)
+            }
+            .padding(.vertical, 4)
+        } else if isTabGroup(line.text) {
+            Text(line.text)
+                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .foregroundColor(Theme.textDim)
+                .lineLimit(nil)
+                .padding(.vertical, 2)
+        } else if editModeSectionPattern.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) != nil
+                  || trimmed.hasPrefix("{start_of_") {
+            Text(editModeSectionName(trimmed).uppercased())
+                .font(.system(.caption, design: .monospaced).bold())
+                .foregroundColor(Theme.sectionColor)
+                .tracking(1)
+                .padding(.vertical, 4)
+        } else if trimmed.hasPrefix("{") && trimmed.hasSuffix("}") {
+            Text(trimmed)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundColor(Theme.textDim)
+                .italic()
+                .padding(.vertical, 2)
+        } else {
+            Text(editModeAttributedLine(trimmed))
+                .lineLimit(3)
+                .padding(.vertical, 2)
+        }
+    }
+
+    private let editModeSectionPattern = try! NSRegularExpression(
+        pattern: #"^(Chorus|Verse|Bridge|Intro|Outro|Pre-Chorus|Interlude|Solo|Tag)(\s*\d*)\s*:?\s*$"#,
+        options: .caseInsensitive
+    )
+
+    private func editModeSectionName(_ text: String) -> String {
+        if let r = text.range(of: #"(?<=:\s)[\w ]+(?=\})"#, options: .regularExpression) {
+            return String(text[r])
+        }
+        return text.hasSuffix(":") ? String(text.dropLast()).trimmingCharacters(in: .whitespaces) : text
+    }
+
+    private let editModeChordPattern = try! NSRegularExpression(pattern: #"\[([^\]]*)\]"#)
+
+    private func editModeAttributedLine(_ raw: String) -> AttributedString {
+        var result = AttributedString()
+        let ns = raw as NSString
+        let matches = editModeChordPattern.matches(in: raw, range: NSRange(location: 0, length: ns.length))
+        var lastEnd = 0
+        for match in matches {
+            let beforeLen = match.range.location - lastEnd
+            if beforeLen > 0 {
+                var part = AttributedString(ns.substring(with: NSRange(location: lastEnd, length: beforeLen)))
+                part.foregroundColor = Theme.textDim
+                part.font = Font.system(.body, design: .monospaced)
+                result += part
+            }
+            var chord = AttributedString(ns.substring(with: match.range))
+            chord.foregroundColor = Theme.accent
+            chord.font = Font.system(.body, design: .monospaced).bold()
+            result += chord
+            lastEnd = match.range.location + match.range.length
+        }
+        if lastEnd < ns.length {
+            var part = AttributedString(ns.substring(from: lastEnd))
+            part.foregroundColor = Theme.text
+            part.font = Font.system(.body, design: .monospaced)
+            result += part
+        }
+        return result
     }
 }
 
