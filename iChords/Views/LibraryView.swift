@@ -37,6 +37,25 @@ struct LibraryView: View {
         }
     }
 
+    private var addButton: some View {
+        Button {
+            appState.showSearch = true
+            appState.save()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "plus")
+                    .font(.subheadline.weight(.bold))
+                Text("Add")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .foregroundColor(.black)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Theme.accent)
+            .cornerRadius(20)
+        }
+    }
+
     private var header: some View {
         HStack {
             Image(systemName: "music.note.list")
@@ -48,22 +67,7 @@ struct LibraryView: View {
 
             Spacer()
 
-            Button {
-                appState.showSearch = true
-                appState.save()
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "plus")
-                        .font(.subheadline.weight(.bold))
-                    Text("Add")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .foregroundColor(.black)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(Theme.accent)
-                .cornerRadius(20)
-            }
+            addButton
         }
         .padding(.horizontal, 16)
         .padding(.top, 16)
@@ -125,13 +129,42 @@ struct LibraryView: View {
     private var songList: some View {
         Group {
             if songs.isEmpty && !appState.favouritesOnly {
-                VStack {
-                    Spacer()
-                    Text("No songs yet.\nTap Add to search and add chords.")
-                        .foregroundColor(Theme.textDim)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
-                    Spacer()
+                GeometryReader { geo in
+                    let φ: CGFloat = 1.618
+                    VStack(spacing: 0) {
+                        // Icon + heading in the upper portion of the screen
+                        Spacer().frame(height: geo.size.height * 0.18)
+
+                        VStack(spacing: 14) {
+                            Image(systemName: "guitars")
+                                .font(.system(size: 80))
+                                .foregroundColor(Theme.accent.opacity(0.2))
+
+                            Text("Your chord library is empty")
+                                .font(.headline)
+                                .foregroundColor(Theme.text)
+                        }
+                        .frame(maxWidth: .infinity)
+
+                        Spacer()
+
+                        // CTA at the golden mean (~61.8% from top)
+                        Button {
+                            appState.showSearch = true
+                            appState.save()
+                        } label: {
+                            Text("Add your first song")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 24)
+                                .padding(.vertical, 12)
+                                .background(Color.blue)
+                                .cornerRadius(22)
+                        }
+
+                        // Bottom spacer = height / φ² ≈ 38.2% of height
+                        Spacer().frame(height: geo.size.height / φ / φ)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if songs.isEmpty && appState.favouritesOnly {
