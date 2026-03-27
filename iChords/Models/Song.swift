@@ -20,6 +20,7 @@ final class Song {
     var lastPlayedAt: Date?
     var lastSessionAt: Date?
     var deletedAt: Date?
+    var linesData: Data?
 
     init(
         source: String? = nil,
@@ -90,6 +91,18 @@ final class Song {
         }
         sessionCount += 1
         lastSessionAt = Date()
+    }
+
+    /// Returns the stored SongLines if available, otherwise builds them from `parsed`,
+    /// encodes them, and caches the result in `linesData` for future launches.
+    func ensureSongLines(for parsed: ParsedSong) -> [SongLine] {
+        if let data = linesData,
+           let lines = try? JSONDecoder().decode([SongLine].self, from: data) {
+            return lines
+        }
+        let lines = SongLineBuilder.build(from: parsed)
+        linesData = try? JSONEncoder().encode(lines)
+        return lines
     }
 
     func toggleFavourite() {
