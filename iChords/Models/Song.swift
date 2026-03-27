@@ -95,10 +95,18 @@ final class Song {
 
     /// Returns the stored SongLines if available, otherwise builds them from `parsed`,
     /// encodes them, and caches the result in `linesData` for future launches.
+    /// Any stored SongLines that map to a blank parsed line are stripped and re-saved.
     func ensureSongLines(for parsed: ParsedSong) -> [SongLine] {
         if let data = linesData,
-           let lines = try? JSONDecoder().decode([SongLine].self, from: data) {
-            return lines
+           let stored = try? JSONDecoder().decode([SongLine].self, from: data) {
+            let cleaned = stored.filter { sl in
+                guard sl.parsedLineIndex < parsed.lines.count else { return false }
+                return !parsed.lines[sl.parsedLineIndex].chunks.isEmpty
+            }
+            if cleaned.count != stored.count {
+                linesData = try? JSONEncoder().encode(cleaned)
+            }
+            return cleaned
         }
         let lines = SongLineBuilder.build(from: parsed)
         linesData = try? JSONEncoder().encode(lines)
