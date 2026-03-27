@@ -59,13 +59,21 @@ struct SearchView: View {
                 .autocorrectionDisabled()
 
             Button(action: performSearch) {
-                Text(loading ? "..." : "Search")
-                    .fontWeight(.semibold)
-                    .foregroundColor(.black)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(Theme.accent)
-                    .cornerRadius(10)
+                ZStack {
+                    Text("Search")
+                        .fontWeight(.semibold)
+                        .opacity(loading ? 0 : 1)
+                    if loading {
+                        ProgressView()
+                            .tint(.black)
+                            .scaleEffect(0.8)
+                    }
+                }
+                .foregroundColor(.black)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Theme.accent)
+                .cornerRadius(10)
             }
             .disabled(loading || query.trimmingCharacters(in: .whitespaces).isEmpty)
         }
