@@ -432,6 +432,7 @@ struct PlayView: View {
                         .foregroundColor(isActiveLine ? Theme.text : Theme.textDim)
                         .fixedSize(horizontal: true, vertical: false)
                 }
+                .padding(.trailing, item.word.isEmpty ? 8 : 0)
             }
         }
     }
