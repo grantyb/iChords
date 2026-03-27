@@ -32,15 +32,34 @@ struct SearchView: View {
         }
     }
 
+    @Environment(\.dismiss) private var dismiss
+
     private var header: some View {
-        VStack(spacing: 4) {
-            Text("Chords")
-                .font(.largeTitle.bold())
-                .foregroundColor(Theme.text)
-            Text("Find chords. Play along.")
-                .font(.subheadline)
-                .foregroundColor(Theme.textDim)
+        ZStack {
+            VStack(spacing: 4) {
+                Text("Chords")
+                    .font(.largeTitle.bold())
+                    .foregroundColor(Theme.text)
+                Text("Find chords. Play along.")
+                    .font(.subheadline)
+                    .foregroundColor(Theme.textDim)
+            }
+
+            HStack {
+                Spacer()
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.body.weight(.semibold))
+                        .foregroundColor(Theme.textDim)
+                        .padding(8)
+                        .background(Theme.surface)
+                        .clipShape(Circle())
+                }
+            }
         }
+        .padding(.horizontal, 16)
         .padding(.top, 16)
         .padding(.bottom, 12)
     }
