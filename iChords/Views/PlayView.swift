@@ -621,7 +621,29 @@ struct PlayView: View {
 
     private func moveEditableLines(from: IndexSet, to: Int) {
         editableLines.move(fromOffsets: from, toOffset: to)
+        ensureTabGroupSpacing()
         saveImmediately()
+    }
+
+    /// After any move, ensure every tab group has a blank line above and below
+    /// it (unless it is at the very start or end of the list).
+    private func ensureTabGroupSpacing() {
+        // Process backwards so insertions don't disturb earlier indices.
+        var i = editableLines.count - 1
+        while i >= 0 {
+            guard isTabGroup(editableLines[i].text) else { i -= 1; continue }
+            // Blank below: only if a next line exists and is non-blank
+            if i < editableLines.count - 1,
+               !editableLines[i + 1].text.trimmingCharacters(in: .whitespaces).isEmpty {
+                editableLines.insert(EditableLine(text: ""), at: i + 1)
+            }
+            // Blank above: only if a previous line exists and is non-blank
+            if i > 0,
+               !editableLines[i - 1].text.trimmingCharacters(in: .whitespaces).isEmpty {
+                editableLines.insert(EditableLine(text: ""), at: i)
+            }
+            i -= 1
+        }
     }
 
     // MARK: - Edit mode views
@@ -650,23 +672,27 @@ struct PlayView: View {
 
     @ViewBuilder
     private func editModeRow(_ line: EditableLine) -> some View {
-        editModeRowContent(line: line)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .onTapGesture { editingLine = line }
-            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                Button(role: .destructive) {
-                    deleteEditableLine(id: line.id)
-                } label: {
-                    Label("Delete", systemImage: "trash")
-                }
-                Button {
-                    duplicateEditableLine(id: line.id)
-                } label: {
-                    Label("Duplicate", systemImage: "plus.square.on.square")
-                }
-                .tint(.indigo)
+        HStack(spacing: 0) {
+            editModeRowContent(line: line)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Spacer(minLength: 8)
+            Button { deleteEditableLine(id: line.id) } label: {
+                Image(systemName: "trash")
+                    .font(.callout)
+                    .foregroundColor(Theme.textDim.opacity(0.7))
+                    .frame(width: 32, height: 32)
             }
+            .buttonStyle(.borderless)
+            Button { duplicateEditableLine(id: line.id) } label: {
+                Image(systemName: "plus.square.on.square")
+                    .font(.callout)
+                    .foregroundColor(Theme.accent.opacity(0.8))
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.borderless)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { editingLine = line }
     }
 
     @ViewBuilder
@@ -683,11 +709,12 @@ struct PlayView: View {
             }
             .padding(.vertical, 4)
         } else if isTabGroup(line.text) {
-            Text(line.text)
-                .font(.system(size: 10, weight: .regular, design: .monospaced))
-                .foregroundColor(Theme.textDim)
-                .lineLimit(nil)
-                .padding(.vertical, 2)
+            VStack(spacing: 0) {
+                ForEach(Array(line.text.components(separatedBy: "\n").enumerated()), id: \.offset) { _, tabLine in
+                    TabLineView(text: tabLine)
+                }
+            }
+            .padding(.vertical, 2)
         } else if editModeSectionPattern.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) != nil
                   || trimmed.hasPrefix("{start_of_") {
             Text(editModeSectionName(trimmed).uppercased())
