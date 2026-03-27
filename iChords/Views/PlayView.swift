@@ -280,6 +280,8 @@ struct PlayView: View {
                     let sl = engine.songLines[slIdx]
                     let isActive = slIdx == engine.activeSongLineIndex
                     songLineContent(lineIdx: lineIdx, slIdx: slIdx, line: line, sl: sl, parsed: parsed, isActive: isActive)
+                } else if line.chunks.isEmpty {
+                    Spacer().frame(height: 16).id("parsed-\(lineIdx)")
                 }
             }
         }
