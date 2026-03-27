@@ -173,6 +173,12 @@ struct EditSongLinesView: View {
                 .foregroundColor(Theme.sectionColor)
                 .tracking(1)
                 .padding(.vertical, 4)
+        } else if isTabGroup(trimmed) {
+            Text(trimmed)
+                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .foregroundColor(Theme.textDim)
+                .lineLimit(nil)
+                .padding(.vertical, 2)
         } else if isDirective(trimmed) {
             Text(trimmed)
                 .font(.system(.caption, design: .monospaced))
@@ -243,9 +249,21 @@ struct EditSongLinesView: View {
     // MARK: - Actions
 
     private func loadLines() {
-        lines = song.chords
-            .components(separatedBy: "\n")
-            .map { EditableLine(text: $0) }
+        let rawLines = song.chords.components(separatedBy: "\n")
+        var result: [EditableLine] = []
+        var i = 0
+        while i < rawLines.count {
+            if isTabRawLine(rawLines[i]) {
+                var j = i + 1
+                while j < rawLines.count && isTabRawLine(rawLines[j]) { j += 1 }
+                result.append(EditableLine(text: rawLines[i..<j].joined(separator: "\n")))
+                i = j
+            } else {
+                result.append(EditableLine(text: rawLines[i]))
+                i += 1
+            }
+        }
+        lines = result
     }
 
     private func startEditing(_ line: EditableLine) {
@@ -280,6 +298,18 @@ struct EditSongLinesView: View {
     }
 
     // MARK: - Line classification
+
+    private static let tabLinePattern = try! NSRegularExpression(pattern: #"^[A-Ga-g]#?\|"#)
+
+    private func isTabRawLine(_ text: String) -> Bool {
+        let t = text.trimmingCharacters(in: .whitespaces)
+        guard !t.isEmpty else { return false }
+        return Self.tabLinePattern.firstMatch(in: t, range: NSRange(t.startIndex..., in: t)) != nil
+    }
+
+    private func isTabGroup(_ text: String) -> Bool {
+        isTabRawLine(text.components(separatedBy: "\n").first ?? text)
+    }
 
     private static let sectionPattern = try! NSRegularExpression(
         pattern: #"^(Chorus|Verse|Bridge|Intro|Outro|Pre-Chorus|Interlude|Solo|Tag)(\s*\d*)\s*:?\s*$"#,
