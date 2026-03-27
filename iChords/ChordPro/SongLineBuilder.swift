@@ -7,10 +7,10 @@ enum SongLineBuilder {
     /// Rules:
     /// - Consecutive tab rows are grouped into a single SongLine (kind: .tab) with one
     ///   beat at 4 000 ms (index 0, no chord highlight).
-    /// - `.section` and `.comment` parsed lines are skipped — they are not timed.
+    /// - `.section`, `.comment`, and blank/whitespace-only `.line` rows are skipped.
     /// - A text row with N chords produces N beats, each at ⌊4 000 / N⌋ ms (minimum 500 ms),
     ///   with beat indices 1…N.
-    /// - A text row with 0 chords (spacer, prose) produces one beat at 4 000 ms (index 0).
+    /// - A text row with 0 chords (prose) produces one beat at 4 000 ms (index 0).
     static func build(from parsed: ParsedSong) -> [SongLine] {
         var lines: [SongLine] = []
         var chordCount = 0
@@ -36,13 +36,13 @@ enum SongLineBuilder {
                 continue
             }
 
-            // Skip section headers and comments — they have no timing
-            if pLine.type == .section || pLine.type == .comment {
+            // Skip section headers, comments, and blank lines — they have no timing
+            if pLine.type == .section || pLine.type == .comment || pLine.chunks.isEmpty {
                 i += 1
                 continue
             }
 
-            // .line type (includes empty / prose / chord-bearing)
+            // .line type (prose / chord-bearing)
             let chordChunks = pLine.chunks.filter { $0.chord != nil }
             let n = chordChunks.count
             let lineChordStart = chordCount
