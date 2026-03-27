@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		03853FBD2E8B34D85DC79187 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 580A9F946CDAD0E6D407B8E7 /* Theme.swift */; };
 		1EBF9D5C0A1AD4A959DD3A75 /* PlaybackEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99BA19817F4C94C6A82560F7 /* PlaybackEngine.swift */; };
-		20A9D96C160F98C1BA27FB17 /* EditSongLinesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 954915F2C59B9F003B8D25FC /* EditSongLinesView.swift */; };
 		2D077CD304D6690DF682382B /* Song.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4AD3ECD9877DAEC078B026 /* Song.swift */; };
 		31DC1B7662D583864DC8BC2F /* SongLine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43FC92B0C60D2365E4232BD2 /* SongLine.swift */; };
 		34764EA8901A1EE427E8794D /* SongsterrService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 569BDECE6613E034C02DFCAC /* SongsterrService.swift */; };
@@ -23,6 +22,7 @@
 		ABD28B798A08461B55C2ECDB /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC7D97C2CE62F9B980580B1E /* AppState.swift */; };
 		AEA29C2F5E314A2D76416456 /* RecentSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22AC75E68A372328D03D4DA0 /* RecentSearch.swift */; };
 		C1F4307152A9787756F75B4B /* SchemaVersions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 804E700274BACB2748FF8897 /* SchemaVersions.swift */; };
+		CE24B2D29DB64C302EAB5A69 /* SongLineEditing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7786D3B8BF38061F882F90B3 /* SongLineEditing.swift */; };
 		D609946314B1E459AEC20BB3 /* iChordsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FFD3EEDF3DBEBBEC770582C /* iChordsApp.swift */; };
 		D9C9B6246E134C26566856EB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FD6D6DB209519D8E8981C9FD /* Assets.xcassets */; };
 		DED990E01FA14C033EC3E869 /* ChordVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = F33383034C7BE2FECDB95DC0 /* ChordVersion.swift */; };
@@ -44,8 +44,8 @@
 		690ED3ABE593D7C9C90E7625 /* iChords.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = iChords.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6F4F3C3DCB1EF5445F7AE0A8 /* ChordProParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChordProParser.swift; sourceTree = "<group>"; };
 		760C91C06D6C251FEAE1AD21 /* ITunesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ITunesService.swift; sourceTree = "<group>"; };
+		7786D3B8BF38061F882F90B3 /* SongLineEditing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongLineEditing.swift; sourceTree = "<group>"; };
 		804E700274BACB2748FF8897 /* SchemaVersions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchemaVersions.swift; sourceTree = "<group>"; };
-		954915F2C59B9F003B8D25FC /* EditSongLinesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditSongLinesView.swift; sourceTree = "<group>"; };
 		99BA19817F4C94C6A82560F7 /* PlaybackEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackEngine.swift; sourceTree = "<group>"; };
 		A1E778DC5854EBBE8B16ECD7 /* EditChordsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditChordsView.swift; sourceTree = "<group>"; };
 		A22DE5D443B37FD21E2B12F8 /* ChordsTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChordsTextEditor.swift; sourceTree = "<group>"; };
@@ -137,10 +137,10 @@
 			children = (
 				A22DE5D443B37FD21E2B12F8 /* ChordsTextEditor.swift */,
 				A1E778DC5854EBBE8B16ECD7 /* EditChordsView.swift */,
-				954915F2C59B9F003B8D25FC /* EditSongLinesView.swift */,
 				DECBBA7470008D4082B14FB2 /* LibraryView.swift */,
 				B5D423FBCE9DB2E5CB57958F /* PlayView.swift */,
 				F4AE83CF6FC70C95B308CC9C /* SearchView.swift */,
+				7786D3B8BF38061F882F90B3 /* SongLineEditing.swift */,
 				67B2D483305204E2C9EE8F47 /* TouchInterceptView.swift */,
 			);
 			path = Views;
@@ -223,7 +223,6 @@
 				35CE87A40F76928131AFFDB6 /* ChordsTextEditor.swift in Sources */,
 				FF0B14F964CE355D1D70EBC3 /* ContentView.swift in Sources */,
 				5B6937B91AFB39362D199E69 /* EditChordsView.swift in Sources */,
-				20A9D96C160F98C1BA27FB17 /* EditSongLinesView.swift in Sources */,
 				E8B31532875A18A632FFDFE2 /* ITunesService.swift in Sources */,
 				4CC5F9900F137F7B45FF5275 /* LibraryView.swift in Sources */,
 				58D34ADD48E752DB809FEE94 /* PlayView.swift in Sources */,
@@ -234,6 +233,7 @@
 				2D077CD304D6690DF682382B /* Song.swift in Sources */,
 				31DC1B7662D583864DC8BC2F /* SongLine.swift in Sources */,
 				FB85A4F2D5FDDF5DA7631FBA /* SongLineBuilder.swift in Sources */,
+				CE24B2D29DB64C302EAB5A69 /* SongLineEditing.swift in Sources */,
 				5908188A3D9917F72E0C541F /* SongResult.swift in Sources */,
 				34764EA8901A1EE427E8794D /* SongsterrService.swift in Sources */,
 				03853FBD2E8B34D85DC79187 /* Theme.swift in Sources */,
