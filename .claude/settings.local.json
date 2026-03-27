@@ -12,7 +12,16 @@
       "Bash(xcodegen generate:*)",
       "Bash(xcodebuild -project /Users/grant/git/iChords/iChords.xcodeproj -scheme iChords -destination 'platform=iOS Simulator,name=iPhone 16' build)",
       "Bash(osascript:*)",
-      "Bash(swift:*)"
+      "Bash(swift:*)",
+      "Bash(./setup.sh)",
+      "Bash(xcrun simctl:*)",
+      "Bash(sudo xcode-select:*)",
+      "Bash(xcode-select:*)",
+      "Bash(DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun simctl list devices available)",
+      "Bash(DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun simctl list devices)",
+      "Bash(mdfind:*)",
+      "Bash(xcodebuild:*)",
+      "Bash(open -a Simulator)"
     ]
   }
 }
