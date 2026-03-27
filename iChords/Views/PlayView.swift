@@ -17,7 +17,11 @@ struct PlayView: View {
     @State private var linePositions: [Int: CGFloat] = [:]
     @State private var scrollViewCenter: CGFloat = 0
 
-    // Fraction of scroll view height used as the playback anchor (0.5 = center of screen)
+    // Lookup tables built from SongLines during loadSong()
+    @State private var parsedToSongLine: [Int: Int] = [:]   // parsedLineIndex → songLineIndex
+    @State private var skippedParsedLines: Set<Int> = []    // secondary lines in tab groups
+
+    // Fraction of scroll view height used as the playback anchor (0.5 = centre)
     private let playbackAnchorFraction: CGFloat = 0.5
 
     var body: some View {
@@ -76,17 +80,18 @@ struct PlayView: View {
             loadSong()
             appState.activeSongId = song.id.uuidString
             appState.save()
-            if appState.activeChordIndex > 0 && appState.activeChordIndex < engine.totalChords {
-                engine.seek(to: appState.activeChordIndex)
+            let saved = appState.activeSongLineIndex
+            if saved > 0 && saved < engine.totalLines {
+                engine.seek(toLine: saved)
             }
         }
         .onDisappear {
             engine.pause()
-            appState.activeChordIndex = engine.activeChordIndex
+            appState.activeSongLineIndex = engine.activeSongLineIndex
             appState.save()
         }
-        .onChange(of: engine.activeChordIndex) { _, newIdx in
-            appState.activeChordIndex = newIdx
+        .onChange(of: engine.activeSongLineIndex) { _, newIdx in
+            appState.activeSongLineIndex = newIdx
         }
         .sheet(isPresented: $state.showEditSheet) {
             EditChordsView(song: song) { _ in
@@ -103,9 +108,7 @@ struct PlayView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     heroSection(parsed)
-
                     songLines(parsed)
-
                     Spacer()
                         .frame(height: UIScreen.main.bounds.height * 0.7)
                 }
@@ -121,15 +124,15 @@ struct PlayView: View {
             .coordinateSpace(name: "scroll")
             .onAppear {
                 scrollProxy = proxy
-                if engine.activeLineIndex > 0 {
-                    proxy.scrollTo("line-\(engine.activeLineIndex)", anchor: .center)
+                if engine.activeSongLineIndex > 0 {
+                    proxy.scrollTo("songline-\(engine.activeSongLineIndex)", anchor: .center)
                 }
             }
-            .onChange(of: engine.activeLineIndex) { _, newLine in
+            .onChange(of: engine.activeSongLineIndex) { _, newIdx in
                 guard !userScrolling else { return }
                 if engine.isPlaying {
                     withAnimation(.easeInOut(duration: 0.3)) {
-                        proxy.scrollTo("line-\(newLine)", anchor: .center)
+                        proxy.scrollTo("songline-\(newIdx)", anchor: .center)
                     }
                 }
             }
@@ -147,17 +150,13 @@ struct PlayView: View {
                         onTouchEnded: {},
                         onScrollEnd: {
                             userScrolling = false
-                            if engine.activeLineIndex >= 0 {
-                                scrollToLine(engine.activeLineIndex)
-                            }
+                            scrollToLine(engine.activeSongLineIndex)
                             if wasPlayingBeforeScroll {
                                 engine.play()
                             }
                         },
                         onScroll: {
-                            if userScrolling {
-                                updateLiveCursor()
-                            }
+                            if userScrolling { updateLiveCursor() }
                         }
                     )
                     .onAppear {
@@ -168,31 +167,30 @@ struct PlayView: View {
         }
     }
 
-    private func scrollToLine(_ lineIndex: Int) {
+    private func scrollToLine(_ slIdx: Int) {
         guard let proxy = scrollProxy else { return }
         withAnimation(.easeInOut(duration: 0.3)) {
-            proxy.scrollTo("line-\(lineIndex)", anchor: .center)
+            proxy.scrollTo("songline-\(slIdx)", anchor: .center)
         }
     }
 
-    // Called continuously while the user is dragging or the scroll is decelerating.
-    // Finds the chord line closest to the playback anchor and updates the engine cursor live.
+    // Finds the SongLine closest to the playback anchor and updates the engine cursor live.
     private func updateLiveCursor() {
         guard !linePositions.isEmpty else { return }
         let anchor = scrollViewCenter
-        let chordLineIndices = Set(engine.chordTimings.map(\.lineIndex))
+        let chordLineIndices = Set(
+            engine.songLines.indices.filter { engine.songLines[$0].beats.contains { $0.index > 0 } }
+        )
         let chordPositions = linePositions.filter { chordLineIndices.contains($0.key) }
         guard !chordPositions.isEmpty else { return }
-        guard let (lineIdx, _) = chordPositions.min(by: { abs($0.value - anchor) < abs($1.value - anchor) }),
-              let chordIdx = engine.chordTimings.first(where: { $0.lineIndex == lineIdx })?.flatIndex,
-              chordIdx != engine.activeChordIndex
+        guard let (slIdx, _) = chordPositions.min(by: { abs($0.value - anchor) < abs($1.value - anchor) }),
+              slIdx != engine.activeSongLineIndex
         else { return }
-        engine.seek(to: chordIdx)
+        engine.seek(toLine: slIdx)
     }
 
     private func heroSection(_ parsed: ParsedSong) -> some View {
         ZStack(alignment: .bottomLeading) {
-            // Blurred background
             if let url = song.artworkUrl, let imageUrl = URL(string: url) {
                 AsyncImage(url: imageUrl) { image in
                     image.resizable().aspectRatio(contentMode: .fill)
@@ -204,14 +202,12 @@ struct PlayView: View {
                     .scaleEffect(1.2)
             }
 
-            // Gradient overlay
             LinearGradient(
                 colors: [Theme.bg.opacity(0.3), Theme.bg.opacity(0.85)],
                 startPoint: .top,
                 endPoint: .bottom
             )
 
-            // Content
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 12) {
                     if let url = song.artworkUrl, let imageUrl = URL(string: url) {
@@ -261,54 +257,67 @@ struct PlayView: View {
     @ViewBuilder
     private func songLines(_ parsed: ParsedSong) -> some View {
         ForEach(Array(parsed.lines.enumerated()), id: \.offset) { lineIdx, line in
+            songLineView(lineIdx: lineIdx, line: line, parsed: parsed)
+        }
+    }
+
+    @ViewBuilder
+    private func songLineView(lineIdx: Int, line: ChordProLine, parsed: ParsedSong) -> some View {
+        if skippedParsedLines.contains(lineIdx) {
+            EmptyView()
+        } else {
             switch line.type {
             case .section:
                 sectionHeader(line.section ?? "")
-                    .id("line-\(lineIdx)")
+                    .id("parsed-\(lineIdx)")
 
             case .comment:
                 commentLine(line.text ?? "")
-                    .id("line-\(lineIdx)")
+                    .id("parsed-\(lineIdx)")
 
             case .line:
-                let isTab = ChordProParser.isTabLine(line)
-                let isProse = !isTab && ChordProParser.isProseLine(line)
-                let lineChordStart = countChordsBeforeLine(lineIdx, in: parsed)
-                let isActiveLine = lineIdx == engine.activeLineIndex
-
-                Group {
-                    if isTab {
-                        tabLine(line)
-                    } else if isProse {
-                        proseLine(line)
-                    } else if line.chunks.isEmpty {
-                        Spacer().frame(height: 16)
-                    } else {
-                        chordLine(
-                            chunks: line.chunks,
-                            chordStartIndex: lineChordStart,
-                            isActiveLine: isActiveLine
-                        )
-                    }
-                }
-                .id("line-\(lineIdx)")
-                .contentShape(Rectangle())
-                .background(
-                    GeometryReader { geo in
-                        Color.clear.preference(
-                            key: LinePositionKey.self,
-                            value: [lineIdx: geo.frame(in: .named("scroll")).midY]
-                        )
-                    }
-                )
-                .onTapGesture {
-                    let firstChord = lineChordStart
-                    if firstChord < engine.totalChords {
-                        engine.seek(to: firstChord)
-                        scrollToLine(lineIdx)
-                    }
+                if let slIdx = parsedToSongLine[lineIdx] {
+                    let sl = engine.songLines[slIdx]
+                    let isActive = slIdx == engine.activeSongLineIndex
+                    songLineContent(lineIdx: lineIdx, slIdx: slIdx, line: line, sl: sl, parsed: parsed, isActive: isActive)
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func songLineContent(lineIdx: Int, slIdx: Int, line: ChordProLine, sl: SongLine, parsed: ParsedSong, isActive: Bool) -> some View {
+        let isTab = sl.kind == .tab
+        let isProse = !isTab && ChordProParser.isProseLine(line)
+
+        Group {
+            if isTab {
+                VStack(spacing: 0) {
+                    ForEach(sl.parsedLineIndex..<(sl.parsedLineIndex + sl.parsedLineCount), id: \.self) { tabIdx in
+                        tabLine(parsed.lines[tabIdx])
+                    }
+                }
+            } else if isProse {
+                proseLine(line)
+            } else if line.chunks.isEmpty {
+                Spacer().frame(height: 16)
+            } else {
+                chordLine(chunks: line.chunks, chordStartIndex: sl.chordStartIndex, isActiveLine: isActive)
+            }
+        }
+        .id("songline-\(slIdx)")
+        .contentShape(Rectangle())
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: LinePositionKey.self,
+                    value: [slIdx: geo.frame(in: .named("scroll")).midY]
+                )
+            }
+        )
+        .onTapGesture {
+            engine.seek(toLine: slIdx)
+            scrollToLine(slIdx)
         }
     }
 
@@ -333,7 +342,7 @@ struct PlayView: View {
 
     private func tabLine(_ line: ChordProLine) -> some View {
         let text = line.chunks.first?.lyric ?? ""
-        return TabLineView(text: text)
+        return TabLineView(text: text, activeColumn: 0)
             .padding(.leading, 20)
             .padding(.trailing, 12)
     }
@@ -363,12 +372,10 @@ struct PlayView: View {
             for chunk in chunks {
                 let chordIdx: Int? = chunk.chord != nil ? { let c = ci; ci += 1; return c }() : nil
 
-                // Split lyric into words, preserving trailing space on each word
                 let lyric = chunk.lyric
                 let parts = lyric.split(separator: " ", omittingEmptySubsequences: false)
 
                 if parts.isEmpty || (parts.count == 1 && parts[0].isEmpty) {
-                    // Chord with no lyric (e.g. trailing chord)
                     if chunk.chord != nil {
                         items.append(WordItem(id: nextId, word: "", chord: chunk.chord, chordIdx: chordIdx))
                         nextId += 1
@@ -391,7 +398,7 @@ struct PlayView: View {
             ForEach(words) { item in
                 VStack(alignment: .leading, spacing: 1) {
                     if let chord = item.chord, let ci = item.chordIdx {
-                        let isActive = ci == engine.activeChordIndex
+                        let isActive = ci == engine.activeFlatChordIndex
                         Text(chord)
                             .font(.system(.caption, design: .monospaced).bold())
                             .foregroundColor(isActive ? .black : Theme.accent)
@@ -439,7 +446,7 @@ struct PlayView: View {
         HStack(spacing: 12) {
             Button {
                 engine.skipBack()
-                scrollToLine(engine.activeLineIndex)
+                scrollToLine(engine.activeSongLineIndex)
             } label: {
                 Image(systemName: "backward.end.fill")
                     .font(.body)
@@ -467,7 +474,7 @@ struct PlayView: View {
 
             Button {
                 engine.skipForward()
-                scrollToLine(engine.activeLineIndex)
+                scrollToLine(engine.activeSongLineIndex)
             } label: {
                 Image(systemName: "forward.end.fill")
                     .font(.body)
@@ -523,25 +530,27 @@ struct PlayView: View {
         if result.title == nil { result.title = song.title }
         parsedSong = result
         engine.speed = song.speed
-        engine.configure(song: result)
+
+        let lines = song.ensureSongLines(for: result)
+        engine.configure(lines: lines)
+
+        // Build lookup tables for the view
+        var map: [Int: Int] = [:]
+        var skipped: Set<Int> = []
+        for (slIdx, sl) in lines.enumerated() {
+            map[sl.parsedLineIndex] = slIdx
+            for i in (sl.parsedLineIndex + 1)..<(sl.parsedLineIndex + sl.parsedLineCount) {
+                skipped.insert(i)
+            }
+        }
+        parsedToSongLine = map
+        skippedParsedLines = skipped
     }
 
     private func reloadParsedSong() {
         engine.reset()
+        song.linesData = nil   // force rebuild of SongLines from updated chords
         loadSong()
-    }
-
-    private func countChordsBeforeLine(_ lineIndex: Int, in parsed: ParsedSong) -> Int {
-        var count = 0
-        for i in 0..<lineIndex {
-            let line = parsed.lines[i]
-            if line.type == .line {
-                for chunk in line.chunks where chunk.chord != nil {
-                    count += 1
-                }
-            }
-        }
-        return count
     }
 }
 
@@ -565,6 +574,7 @@ struct LinePositionKey: PreferenceKey {
 
 private struct TabLineView: View {
     let text: String
+    var activeColumn: Int = 0   // reserved for future column highlighting; 0 = none
 
     var body: some View {
         let font = UIFont.monospacedSystemFont(ofSize: 13, weight: .regular)
@@ -575,7 +585,6 @@ private struct TabLineView: View {
         Canvas { context, size in
             guard !chars.isEmpty, size.width > 0 else { return }
 
-            // Scale horizontally so long lines always fit the available width
             let naturalWidth = CGFloat(chars.count) * cw
             if naturalWidth > size.width {
                 context.concatenate(CGAffineTransform(scaleX: size.width / naturalWidth, y: 1))
@@ -589,7 +598,6 @@ private struct TabLineView: View {
                 let c = chars[i]
 
                 if c == "-" {
-                    // Coalesce consecutive dashes into one continuous string line
                     var j = i
                     while j < chars.count && chars[j] == "-" { j += 1 }
                     var p = Path()
@@ -606,19 +614,16 @@ private struct TabLineView: View {
                     i += 1
 
                 } else if c.isNumber {
-                    // Collect the full fret number (may be two digits, e.g. 12)
                     var j = i
                     while j < chars.count && chars[j].isNumber { j += 1 }
                     let numStr = String(chars[i..<j])
                     let numWidth = CGFloat(j - i) * cw
 
-                    // Draw faint string line behind the number
                     var p = Path()
                     p.move(to: CGPoint(x: x, y: midY))
                     p.addLine(to: CGPoint(x: x + numWidth, y: midY))
                     context.stroke(p, with: .color(Theme.textDim.opacity(0.2)), lineWidth: 0.75)
 
-                    // Draw fret number centred in its character slots
                     let label = context.resolve(
                         Text(numStr)
                             .font(.system(size: 13, weight: .medium, design: .monospaced))
@@ -628,7 +633,6 @@ private struct TabLineView: View {
                     i = j
 
                 } else {
-                    // String names (e, B, G, D, A, E), spaces, anything else
                     let label = context.resolve(
                         Text(String(c))
                             .font(.system(size: 13, weight: .regular, design: .monospaced))
