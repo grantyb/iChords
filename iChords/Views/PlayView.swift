@@ -12,9 +12,13 @@ struct PlayView: View {
     @State private var engine = PlaybackEngine()
     @State private var sessionRecorded = false
     @State private var userScrolling = false
+    @State private var wasPlayingBeforeScroll = false
     @State private var scrollProxy: ScrollViewProxy?
     @State private var linePositions: [Int: CGFloat] = [:]
     @State private var scrollViewCenter: CGFloat = 0
+
+    // Fraction of scroll view height used as the playback anchor (0.5 = center of screen)
+    private let playbackAnchorFraction: CGFloat = 0.5
 
     var body: some View {
         @Bindable var state = appState
@@ -136,19 +140,28 @@ struct PlayView: View {
                 GeometryReader { geo in
                     TouchInterceptView(
                         onTouchBegan: {
+                            wasPlayingBeforeScroll = engine.isPlaying
+                            engine.pause()
                             userScrolling = true
                         },
-                        onTouchEnded: {
-                            Task { @MainActor in
-                                try? await Task.sleep(nanoseconds: 400_000_000)
-                                guard userScrolling else { return }
-                                snapToNearestLine()
-                                userScrolling = false
+                        onTouchEnded: {},
+                        onScrollEnd: {
+                            userScrolling = false
+                            if engine.activeLineIndex >= 0 {
+                                scrollToLine(engine.activeLineIndex)
+                            }
+                            if wasPlayingBeforeScroll {
+                                engine.play()
+                            }
+                        },
+                        onScroll: {
+                            if userScrolling {
+                                updateLiveCursor()
                             }
                         }
                     )
                     .onAppear {
-                        scrollViewCenter = geo.size.height / 2
+                        scrollViewCenter = geo.size.height * playbackAnchorFraction
                     }
                 }
             )
@@ -162,23 +175,19 @@ struct PlayView: View {
         }
     }
 
-    private func snapToNearestLine() {
+    // Called continuously while the user is dragging or the scroll is decelerating.
+    // Finds the chord line closest to the playback anchor and updates the engine cursor live.
+    private func updateLiveCursor() {
         guard !linePositions.isEmpty else { return }
-        let center = scrollViewCenter
-
-        // Filter to lines that have chords
+        let anchor = scrollViewCenter
         let chordLineIndices = Set(engine.chordTimings.map(\.lineIndex))
         let chordPositions = linePositions.filter { chordLineIndices.contains($0.key) }
         guard !chordPositions.isEmpty else { return }
-
-        // Find the chord line closest to (or just below) center
-        let target = chordPositions.min(by: { abs($0.value - center) < abs($1.value - center) })
-        if let (lineIdx, _) = target {
-            if let chordIdx = engine.chordTimings.first(where: { $0.lineIndex == lineIdx })?.flatIndex {
-                engine.seek(to: chordIdx)
-            }
-            scrollToLine(lineIdx)
-        }
+        guard let (lineIdx, _) = chordPositions.min(by: { abs($0.value - anchor) < abs($1.value - anchor) }),
+              let chordIdx = engine.chordTimings.first(where: { $0.lineIndex == lineIdx })?.flatIndex,
+              chordIdx != engine.activeChordIndex
+        else { return }
+        engine.seek(to: chordIdx)
     }
 
     private func heroSection(_ parsed: ParsedSong) -> some View {
