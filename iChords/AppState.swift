@@ -15,7 +15,7 @@ final class AppState {
 
     /// Song view
     var activeSongId: String = ""
-    var activeChordIndex: Int = 0
+    var activeSongLineIndex: Int = 0
 
     /// Edit sheet
     var showEditSheet: Bool = false
@@ -32,7 +32,7 @@ final class AppState {
     /// Navigate to a song
     func openSong(id: UUID) {
         activeSongId = id.uuidString
-        activeChordIndex = 0
+        activeSongLineIndex = 0
         showEditSheet = false
         editCursorPosition = 0
         save()
@@ -41,7 +41,7 @@ final class AppState {
     /// Return to library
     func closeSong() {
         activeSongId = ""
-        activeChordIndex = 0
+        activeSongLineIndex = 0
         showEditSheet = false
         editCursorPosition = 0
         save()
@@ -54,7 +54,7 @@ final class AppState {
             "showSearch": showSearch,
             "searchQuery": searchQuery,
             "activeSongId": activeSongId,
-            "activeChordIndex": activeChordIndex,
+            "activeSongLineIndex": activeSongLineIndex,
             "showEditSheet": showEditSheet,
             "editCursorPosition": editCursorPosition,
         ]
@@ -70,7 +70,7 @@ final class AppState {
         showSearch = data["showSearch"] as? Bool ?? false
         searchQuery = data["searchQuery"] as? String ?? ""
         activeSongId = data["activeSongId"] as? String ?? ""
-        activeChordIndex = data["activeChordIndex"] as? Int ?? 0
+        activeSongLineIndex = data["activeSongLineIndex"] as? Int ?? 0
         showEditSheet = data["showEditSheet"] as? Bool ?? false
         editCursorPosition = data["editCursorPosition"] as? Int ?? 0
     }
