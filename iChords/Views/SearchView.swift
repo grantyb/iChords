@@ -272,6 +272,11 @@ struct SearchView: View {
             )
             song.lastPlayedAt = Date()
 
+            // Pre-build and cache song lines
+            let parsedForLines = ChordProParser.parse(chords)
+            let songLines = SongLineBuilder.build(from: parsedForLines)
+            song.linesData = try? JSONEncoder().encode(songLines)
+
             modelContext.insert(song)
 
             // Create initial chord version
