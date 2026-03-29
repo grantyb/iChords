@@ -24,7 +24,17 @@
       "Bash(open -a Simulator)",
       "Bash(git rm:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(for var:*)",
+      "Bash(do echo:*)",
+      "Bash(/usr/libexec/PlistBuddy -c \"Print CFBundleIdentifier\" /Users/grant/Library/Developer/Xcode/DerivedData/iChords-bhakfdctwllzamagwmonwopbxixo/Build/Products/Debug-iphonesimulator/iChords.app/Info.plist)",
+      "Bash(UDID=\"A302CBFB-E3EC-42B4-ADF0-CFAA6471D7D1\")",
+      "Bash(APP_PATH=\"/Users/grant/Library/Developer/Xcode/DerivedData/iChords-bhakfdctwllzamagwmonwopbxixo/Build/Products/Debug-iphonesimulator/iChords.app\")",
+      "Bash(BUNDLE_ID=\"com.grantbrookshire.iChords\")",
+      "Bash(__NEW_LINE_7a4d90b2aaaf7160__ xcrun:*)",
+      "Bash(UDID=\"A302CBFB-E3EC-42B4-ADF0-CFAA6471D7D1\" xcrun simctl bootstatus \"$UDID\")",
+      "Bash(grep -E \"^.*error:.*$\")",
+      "Bash(grep -v \"^$\")"
     ]
   }
 }
