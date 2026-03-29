@@ -5,12 +5,8 @@ enum SongLineBuilder {
     /// Builds a flat array of `SongLine` values from a parsed ChordPro song.
     ///
     /// Rules:
-    /// - Consecutive tab rows are grouped into a single SongLine (kind: .tab) with one
-    ///   beat at 4 000 ms (index 0, no chord highlight).
+    /// - Consecutive tab rows are grouped into a single SongLine (kind: .tab).
     /// - `.section`, `.comment`, and blank/whitespace-only `.line` rows are skipped.
-    /// - A text row with N chords produces N beats, each at ⌊4 000 / N⌋ ms (minimum 500 ms),
-    ///   with beat indices 1…N.
-    /// - A text row with 0 chords (prose) produces one beat at 4 000 ms (index 0).
     static func build(from parsed: ParsedSong) -> [SongLine] {
         var lines: [SongLine] = []
         var chordCount = 0
@@ -30,7 +26,7 @@ enum SongLineBuilder {
                     parsedLineIndex: i,
                     parsedLineCount: j - i,
                     chordStartIndex: chordCount,
-                    beats: [SongBeat(index: 0, durationMs: 4000)]
+                    beats: []
                 ))
                 i = j
                 continue
@@ -47,25 +43,52 @@ enum SongLineBuilder {
             let n = chordChunks.count
             let lineChordStart = chordCount
 
-            let beats: [SongBeat]
-            if n == 0 {
-                beats = [SongBeat(index: 0, durationMs: 4000)]
-            } else {
-                let dur = max(500, 4000 / n)
-                beats = (1...n).map { SongBeat(index: $0, durationMs: dur) }
-            }
-
             lines.append(SongLine(
                 kind: .text,
                 parsedLineIndex: i,
                 parsedLineCount: 1,
                 chordStartIndex: lineChordStart,
-                beats: beats
+                beats: []
             ))
             chordCount += n
             i += 1
         }
 
         return lines
+    }
+
+    /// Returns one `SongBeat` per tab column that has at least one non-dash character
+    /// across all rows in the tab group. Falls back to a single index-0 beat if none found.
+    static func tabBeats(for sl: SongLine, in parsed: ParsedSong) -> [SongBeat] {
+        guard sl.kind == .tab else { return [SongBeat(index: 0, durationMs: 0)] }
+
+        // Collect the body of each tab row (content after the first `|`, trailing `|` stripped).
+        var bodies: [[Character]] = []
+        for i in sl.parsedLineIndex ..< sl.parsedLineIndex + sl.parsedLineCount {
+            guard i < parsed.lines.count,
+                  let lyric = parsed.lines[i].chunks.first?.lyric,
+                  let pipeIdx = lyric.firstIndex(of: "|") else { continue }
+            var body = String(lyric[lyric.index(after: pipeIdx)...])
+            if body.hasSuffix("|") { body = String(body.dropLast()) }
+            bodies.append(Array(body))
+        }
+
+        guard !bodies.isEmpty else { return [SongBeat(index: 0, durationMs: 0)] }
+
+        let maxLen = bodies.map(\.count).max() ?? 0
+        var beats: [SongBeat] = []
+        var beatIndex = 0
+        var prevWasDash = true
+
+        for pos in 0 ..< maxLen {
+            let hasFret = bodies.contains { $0.count > pos && $0[pos] != "-" }
+            if hasFret && prevWasDash {
+                beatIndex += 1
+                beats.append(SongBeat(index: beatIndex, durationMs: 0))
+            }
+            prevWasDash = !hasFret
+        }
+
+        return beats.isEmpty ? [SongBeat(index: 0, durationMs: 0)] : beats
     }
 }

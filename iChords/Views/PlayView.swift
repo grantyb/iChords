@@ -13,20 +13,20 @@ struct PlayView: View {
     @State private var parsedSong: ParsedSong?
     @State private var engine = PlaybackEngine()
     @State private var sessionRecorded = false
-    @State private var userScrolling = false
-    @State private var wasPlayingBeforeScroll = false
+    @State private var autoplaySuspended = false
     @State private var scrollProxy: ScrollViewProxy?
     @State private var scrollEndTask: Task<Void, Never>? = nil
     @State private var linePositions: [Int: CGFloat] = [:]
     @State private var scrollViewCenter: CGFloat = UIScreen.main.bounds.height * 0.25
     @State private var heroHeight: CGFloat = 0
 
-    @State private var isRecording = false
+    @State private var isEditingBeatDuration = false
+    @State private var beatDurationInput = ""
+    @FocusState private var beatDurationFocused: Bool
 
     // Edit mode
     @State private var isEditing = false
-    @State private var editableLines: [EditableLine] = []
-    @State private var editingLine: EditableLine? = nil
+    @State private var editMode = EditModeController()
 
     // Lookup tables built from SongLines during loadSong()
     @State private var parsedToSongLine: [Int: Int] = [:]   // parsedLineIndex → songLineIndex
@@ -91,8 +91,8 @@ struct PlayView: View {
             appState.activeSongId = song.id.uuidString
             appState.save()
             let saved = appState.activeSongLineIndex
-            if saved > 0 && saved < engine.totalLines {
-                engine.seek(toLine: saved)
+            if saved > 0 && saved < engine.songLines.count {
+                engine.seek(toLine: saved, beatValue: 0)
             }
         }
         .onDisappear {
@@ -104,14 +104,17 @@ struct PlayView: View {
         .onChange(of: engine.activeSongLineIndex) { _, newIdx in
             appState.activeSongLineIndex = newIdx
         }
-        .sheet(item: $editingLine) { line in
-            let chords = editableLines.map(\.text).joined(separator: "\n")
+        .onChange(of: engine.tickCount) { _, _ in
+            scrollToLine(engine.activeSongLineIndex)
+        }
+        .sheet(item: Bindable(editMode).editingLine) { line in
+            let chords = editMode.lines.map(\.text).joined(separator: "\n")
             LineEditorModal(
                 line: line,
                 uniqueChords: ChordProParser.uniqueChords(in: ChordProParser.parse(chords)),
                 onSave: { newText in
-                    updateEditableLine(id: line.id, text: newText)
-                    saveImmediately()
+                    editMode.update(id: line.id, text: newText)
+                    editMode.save(to: song, context: modelContext)
                 }
             )
         }
@@ -131,15 +134,7 @@ struct PlayView: View {
             .onAppear {
                 scrollProxy = proxy
                 if engine.activeSongLineIndex > 0 {
-                    proxy.scrollTo("songline-\(engine.activeSongLineIndex)", anchor: .center)
-                }
-            }
-            .onChange(of: engine.activeSongLineIndex) { _, newIdx in
-                guard !userScrolling else { return }
-                if engine.isPlaying {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        proxy.scrollTo("songline-\(newIdx)", anchor: .center)
-                    }
+                    scrollToLine(engine.activeSongLineIndex)
                 }
             }
             .onPreferenceChange(ContentOriginKey.self) { originY in
@@ -155,18 +150,13 @@ struct PlayView: View {
             .onScrollGeometryChange(for: CGFloat.self) { geo in
                 geo.contentOffset.y
             } action: { _, _ in
-                guard userScrolling else { return }
-                updateLiveCursor()
+                if !autoplaySuspended { updateLiveCursor() }
                 scheduleScrollEnd()
             }
             .simultaneousGesture(
-                DragGesture(minimumDistance: 0)
+                DragGesture(minimumDistance: 1)
                     .onChanged { _ in
-                        if !userScrolling {
-                            wasPlayingBeforeScroll = engine.isPlaying
-                            engine.pause()
-                            userScrolling = true
-                        }
+                        autoplaySuspended = engine.isPlaying
                     }
                     .onEnded { _ in
                         scheduleScrollEnd()
@@ -180,17 +170,19 @@ struct PlayView: View {
         scrollEndTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(150))
             guard !Task.isCancelled else { return }
-            userScrolling = false
-            if wasPlayingBeforeScroll {
-                engine.play()
-            }
+            autoplaySuspended = false
         }
     }
 
     private func scrollToLine(_ slIdx: Int) {
         guard let proxy = scrollProxy else { return }
+        autoplaySuspended = true
         withAnimation(.easeInOut(duration: 0.3)) {
             proxy.scrollTo("songline-\(slIdx)", anchor: .center)
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(300))
+            autoplaySuspended = false
         }
     }
 
@@ -219,7 +211,7 @@ struct PlayView: View {
         }
 
         guard slIdx != engine.activeSongLineIndex else { return }
-        engine.seek(toLine: slIdx)
+        engine.seek(toLine: slIdx, beatValue: 0)
     }
 
     private func heroSection(_ parsed: ParsedSong) -> some View {
@@ -335,11 +327,11 @@ struct PlayView: View {
     @ViewBuilder
     private func songLineContent(lineIdx: Int, slIdx: Int, line: ChordProLine, sl: SongLine, parsed: ParsedSong, isActive: Bool) -> some View {
         let isTab = sl.kind == .tab
-        let isProse = !isTab && ChordProParser.isProseLine(line)
-        let isWholeLineBeat = isRecording && sl.beats.contains { $0.index == 0 }
-        let recordBeatFlatIndices: Set<Int> = isRecording
-            ? Set(sl.beats.filter { $0.index > 0 }.map { sl.chordStartIndex + $0.index - 1 })
-            : []
+        let wholeLineBeat = sl.beats.first { $0.index == 0 }
+        let hasWholeLineBeat = wholeLineBeat != nil
+        let wholeLineBeatColor: Color = wholeLineBeat?.durationMs == nil ? .red : .green
+        let recordBeatDurations: [Int: Int?] = Dictionary(uniqueKeysWithValues: sl.beats.filter { $0.index > 0 }
+                .map { (sl.chordStartIndex + $0.index - 1, $0.durationMs) })
 
         Group {
             if isTab {
@@ -348,18 +340,13 @@ struct PlayView: View {
                         tabLine(parsed.lines[tabIdx])
                     }
                 }
-            } else if isProse {
-                proseLine(line)
             } else {
                 chordLine(
                     chunks: line.chunks,
                     chordStartIndex: sl.chordStartIndex,
                     isActiveLine: isActive,
                     slIdx: slIdx,
-                    recordBeatFlatIndices: recordBeatFlatIndices,
-                    onBeatTap: { flatIdx in
-                        deleteBeat(slIdx: slIdx, beatIndex: flatIdx - sl.chordStartIndex + 1)
-                    }
+                    recordBeatDurations: recordBeatDurations
                 )
             }
         }
@@ -376,7 +363,7 @@ struct PlayView: View {
             }
         )
         .overlay {
-            if isWholeLineBeat { Color.red.opacity(0.12) }
+            if engine.isRecording && hasWholeLineBeat { wholeLineBeatColor.opacity(0.12) }
         }
         .cornerRadius(4)
         .padding(.horizontal, 10) // outer screen margin — outside the background
@@ -391,12 +378,8 @@ struct PlayView: View {
             }
         )
         .onTapGesture {
-            if isWholeLineBeat {
-                deleteBeat(slIdx: slIdx, beatIndex: 0)
-            } else {
-                engine.seek(toLine: slIdx)
-                scrollToLine(slIdx)
-            }
+            engine.seek(toLine: slIdx, beatValue: 0)
+            scrollToLine(slIdx)
         }
     }
 
@@ -424,13 +407,6 @@ struct PlayView: View {
         return TabLineView(text: text, activeColumn: 0)
     }
 
-    private func proseLine(_ line: ChordProLine) -> some View {
-        let text = line.chunks.map(\.lyric).joined()
-        return Text(text)
-            .font(.subheadline)
-            .foregroundColor(Theme.textDim)
-    }
-
     private struct WordItem: Identifiable {
         let id: Int
         let word: String
@@ -438,7 +414,7 @@ struct PlayView: View {
         let chordIdx: Int?
     }
 
-    private func chordLine(chunks: [ChordChunk], chordStartIndex: Int, isActiveLine: Bool, slIdx: Int = 0, recordBeatFlatIndices: Set<Int> = [], onBeatTap: ((Int) -> Void)? = nil) -> some View {
+    private func chordLine(chunks: [ChordChunk], chordStartIndex: Int, isActiveLine: Bool, slIdx: Int = 0, recordBeatDurations: [Int: Int?] = [:]) -> some View {
         let words: [WordItem] = {
             var items: [WordItem] = []
             var ci = chordStartIndex
@@ -471,18 +447,20 @@ struct PlayView: View {
 
         return FlowLayout(spacing: 0) {
             ForEach(words) { item in
-                let isBeatTarget = item.chordIdx.map { recordBeatFlatIndices.contains($0) } ?? false
+                let beatDuration = item.chordIdx.flatMap { recordBeatDurations[$0] }
+                let isBeatTarget = beatDuration != nil
+                let beatColor: Color = beatDuration == 0 ? .red : .green
                 VStack(alignment: .leading, spacing: 1) {
                     if let chord = item.chord, let ci = item.chordIdx {
                         let isActive = ci == engine.activeFlatChordIndex
                         Text(chord)
                             .font(.system(.caption, design: .monospaced).bold())
-                            .foregroundColor(isActive ? .black : (isBeatTarget ? .red : Theme.accent))
+                            .foregroundColor(isActive ? .black : (engine.isRecording && isBeatTarget ? beatColor : Theme.accent))
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
                             .background(
                                 RoundedRectangle(cornerRadius: 3)
-                                    .fill(isActive ? Theme.accent : (isBeatTarget ? Color.red.opacity(0.15) : Theme.chordBg))
+                                    .fill(isActive ? Theme.accent : (engine.isRecording && isBeatTarget ? beatColor.opacity(0.15) : Theme.chordBg))
                             )
                             .shadow(color: isActive ? Theme.accentGlow : .clear, radius: 5)
                     } else {
@@ -495,30 +473,17 @@ struct PlayView: View {
 
                     Text(item.word.isEmpty ? " " : item.word)
                         .font(.system(.body, design: .monospaced))
-                        .foregroundColor(isBeatTarget ? .red : (isActiveLine ? Theme.text : Theme.textDim))
+                        .foregroundColor(isBeatTarget ? beatColor : (isActiveLine ? Theme.text : Theme.textDim))
                         .fixedSize(horizontal: true, vertical: false)
                 }
                 .padding(.trailing, item.word.trimmingCharacters(in: .whitespaces).isEmpty ? 8 : 0)
-                .overlay {
-                    if isRecording && engine.isPlaying, let ci = item.chordIdx {
-                        // Record+playing: tap any forward chord to stamp timing
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                let beatValue = ci - chordStartIndex + 1
-                                if engine.recordTap(atLine: slIdx, beatValue: beatValue) {
-                                    song.linesData = try? JSONEncoder().encode(engine.songLines)
-                                }
-                            }
-                    } else if isBeatTarget {
-                        // Record+paused: tap existing beat targets to delete them
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                if let ci = item.chordIdx { onBeatTap?(ci) }
-                            }
-                    }
+                .onTapGesture {
+                    guard let ci = item.chordIdx else { return }
+                    let beatValue = ci - chordStartIndex + 1
+                    engine.seek(toLine: slIdx, beatValue: beatValue)
+                    scrollToLine(slIdx)
                 }
+                .allowsHitTesting(item.chordIdx != nil)
             }
         }
     }
@@ -527,7 +492,7 @@ struct PlayView: View {
         HStack {
             HStack(spacing: 8) {
                 Button {
-                    engine.skipBack()
+                    engine.stepBack()
                     scrollToLine(engine.activeSongLineIndex)
                 } label: {
                     Image(systemName: "backward.end.fill")
@@ -544,18 +509,28 @@ struct PlayView: View {
                         song.recordSession()
                     }
                 } label: {
-                    Image(systemName: engine.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.title3)
-                        .foregroundColor(engine.isPlaying ? Theme.accent : .black)
-                        .frame(width: 56, height: 56)
-                        .background(
-                            Circle()
-                                .fill(engine.isPlaying ? Theme.surface2 : Theme.accent)
-                        )
+                    let isStalled = engine.isPlaying && (engine.isRecording || engine.currentBeatDurationMs == nil)
+                    ZStack {
+                        Circle()
+                            .fill(engine.isPlaying ? Theme.surface2 : Theme.accent)
+                        if isStalled {
+                            StalledIndicator()
+                        } else {
+                            Image(systemName: engine.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.title3)
+                                .foregroundColor(engine.isPlaying ? Theme.accent : .black)
+                        }
+                    }
+                    .frame(width: 56, height: 56)
                 }
 
                 Button {
-                    engine.skipForward()
+                    if engine.isRecording {
+                        engine.commitElapsedAndStepForward()
+                        song.linesData = try? JSONEncoder().encode(engine.songLines)
+                    } else {
+                        engine.stepForward()
+                    }
                     scrollToLine(engine.activeSongLineIndex)
                 } label: {
                     Image(systemName: "forward.end.fill")
@@ -568,12 +543,46 @@ struct PlayView: View {
 
             Spacer()
 
+            let durationMs = engine.currentBeatDurationMs
             Button {
-                isRecording.toggle()
+                engine.deleteCurrentBeat()
+                scrollToLine(engine.activeSongLineIndex)
+                song.linesData = try? JSONEncoder().encode(engine.songLines)
             } label: {
-                Image(systemName: isRecording ? "record.circle.fill" : "record.circle")
+                Image(systemName: "xmark.circle")
+                    .font(.caption)
+                    .foregroundColor(Theme.textDim)
+                    .frame(width: 28, height: 28)
+            }
+            if isEditingBeatDuration {
+                TextField("ms", text: $beatDurationInput)
+                    .keyboardType(.numberPad)
+                    .focused($beatDurationFocused)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(Theme.text)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 64)
+                    .onSubmit { commitBeatDurationEdit() }
+                    .onChange(of: beatDurationFocused) { _, focused in
+                        if !focused { commitBeatDurationEdit() }
+                    }
+            } else {
+                Text(durationMs.map { "\($0) ms" } ?? "-- ms")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(Theme.textDim)
+                    .onTapGesture {
+                        beatDurationInput = durationMs.map { "\($0)" } ?? ""
+                        isEditingBeatDuration = true
+                        beatDurationFocused = true
+                    }
+            }
+
+            Button {
+                engine.isRecording.toggle()
+            } label: {
+                Image(systemName: engine.isRecording ? "record.circle.fill" : "record.circle")
                     .font(.title2)
-                    .foregroundColor(isRecording ? .red : Theme.textDim)
+                    .foregroundColor(engine.isRecording ? .red : Theme.textDim)
                     .frame(width: 44, height: 44)
             }
         }
@@ -590,10 +599,14 @@ struct PlayView: View {
 
     // MARK: - Helpers
 
-    private func deleteBeat(slIdx: Int, beatIndex: Int) {
-        engine.removeBeat(fromLine: slIdx, withBeatIndex: beatIndex)
-        song.linesData = try? JSONEncoder().encode(engine.songLines)
+    private func commitBeatDurationEdit() {
+        isEditingBeatDuration = false
+        if let ms = Int(beatDurationInput), ms >= 0 {
+            engine.setCurrentBeatDuration(ms)
+            song.linesData = try? JSONEncoder().encode(engine.songLines)
+        }
     }
+
 
     private func loadSong() {
         let parsed = ChordProParser.parse(song.chords)
@@ -602,7 +615,36 @@ struct PlayView: View {
         if result.title == nil { result.title = song.title }
         parsedSong = result
 
-        let lines = song.ensureSongLines(for: result)
+        var lines = song.ensureSongLines(for: result)
+
+        // Ensure every line has at least one beat; for lines with chords, one beat per chord.
+        var needsResave = false
+        lines = lines.map { sl in
+            guard sl.beats.isEmpty else { return sl }
+            needsResave = true
+            let beats: [SongBeat]
+            if sl.kind == .tab {
+                beats = SongLineBuilder.tabBeats(for: sl, in: result)
+            } else {
+                let chordCount = sl.parsedLineIndex < result.lines.count
+                    ? result.lines[sl.parsedLineIndex].chunks.filter { $0.chord != nil }.count
+                    : 0
+                beats = chordCount > 0
+                    ? (1...chordCount).map { SongBeat(index: $0, durationMs: 0) }
+                    : [SongBeat(index: 0, durationMs: 0)]
+            }
+            return SongLine(
+                kind: sl.kind,
+                parsedLineIndex: sl.parsedLineIndex,
+                parsedLineCount: sl.parsedLineCount,
+                chordStartIndex: sl.chordStartIndex,
+                beats: beats
+            )
+        }
+        if needsResave {
+            song.linesData = try? JSONEncoder().encode(lines)
+        }
+
         engine.configure(lines: lines)
 
         // Build lookup tables for the view
@@ -632,77 +674,8 @@ struct PlayView: View {
             reloadParsedSong()
         } else {
             engine.pause()
-            loadEditableLines()
+            editMode.load(from: song)
             isEditing = true
-        }
-    }
-
-    private func loadEditableLines() {
-        let rawLines = song.chords.components(separatedBy: "\n")
-        var result: [EditableLine] = []
-        var i = 0
-        while i < rawLines.count {
-            if isTabRawLine(rawLines[i]) {
-                var j = i + 1
-                while j < rawLines.count && isTabRawLine(rawLines[j]) { j += 1 }
-                result.append(EditableLine(text: rawLines[i..<j].joined(separator: "\n")))
-                i = j
-            } else {
-                result.append(EditableLine(text: rawLines[i]))
-                i += 1
-            }
-        }
-        editableLines = result
-    }
-
-    private func saveImmediately() {
-        let text = editableLines.map(\.text).joined(separator: "\n")
-        song.chords = text
-        song.linesData = nil
-        ChordVersion.saveNewVersion(for: song, text: text, context: modelContext)
-    }
-
-    private func updateEditableLine(id: UUID, text: String) {
-        guard let idx = editableLines.firstIndex(where: { $0.id == id }) else { return }
-        editableLines[idx].text = text
-    }
-
-    private func deleteEditableLine(id: UUID) {
-        editableLines.removeAll { $0.id == id }
-        saveImmediately()
-    }
-
-    private func duplicateEditableLine(id: UUID) {
-        guard let idx = editableLines.firstIndex(where: { $0.id == id }) else { return }
-        editableLines.insert(EditableLine(text: editableLines[idx].text), at: idx + 1)
-        ensureTabGroupSpacing()
-        saveImmediately()
-    }
-
-    private func moveEditableLines(from: IndexSet, to: Int) {
-        editableLines.move(fromOffsets: from, toOffset: to)
-        ensureTabGroupSpacing()
-        saveImmediately()
-    }
-
-    /// After any move, ensure every tab group has a blank line above and below
-    /// it (unless it is at the very start or end of the list).
-    private func ensureTabGroupSpacing() {
-        // Process backwards so insertions don't disturb earlier indices.
-        var i = editableLines.count - 1
-        while i >= 0 {
-            guard isTabGroup(editableLines[i].text) else { i -= 1; continue }
-            // Blank below: only if a next line exists and is non-blank
-            if i < editableLines.count - 1,
-               !editableLines[i + 1].text.trimmingCharacters(in: .whitespaces).isEmpty {
-                editableLines.insert(EditableLine(text: ""), at: i + 1)
-            }
-            // Blank above: only if a previous line exists and is non-blank
-            if i > 0,
-               !editableLines[i - 1].text.trimmingCharacters(in: .whitespaces).isEmpty {
-                editableLines.insert(EditableLine(text: ""), at: i)
-            }
-            i -= 1
         }
     }
 
@@ -715,10 +688,13 @@ struct PlayView: View {
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
 
-            ForEach(editableLines) { line in
+            ForEach(editMode.lines) { line in
                 editModeRow(line)
             }
-            .onMove { from, to in moveEditableLines(from: from, to: to) }
+            .onMove { from, to in
+                editMode.move(from: from, to: to)
+                editMode.save(to: song, context: modelContext)
+            }
 
             Color.clear.frame(height: 40)
                 .listRowBackground(Color.clear)
@@ -736,14 +712,20 @@ struct PlayView: View {
             editModeRowContent(line: line)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Spacer(minLength: 8)
-            Button { deleteEditableLine(id: line.id) } label: {
+            Button {
+                editMode.delete(id: line.id)
+                editMode.save(to: song, context: modelContext)
+            } label: {
                 Image(systemName: "trash")
                     .font(.callout)
                     .foregroundColor(Theme.textDim.opacity(0.7))
                     .frame(width: 32, height: 32)
             }
             .buttonStyle(.borderless)
-            Button { duplicateEditableLine(id: line.id) } label: {
+            Button {
+                editMode.duplicate(id: line.id)
+                editMode.save(to: song, context: modelContext)
+            } label: {
                 Image(systemName: "plus.square.on.square")
                     .font(.callout)
                     .foregroundColor(Theme.accent.opacity(0.8))
@@ -752,7 +734,7 @@ struct PlayView: View {
             .buttonStyle(.borderless)
         }
         .contentShape(Rectangle())
-        .onTapGesture { editingLine = line }
+        .onTapGesture { editMode.editingLine = line }
     }
 
     @ViewBuilder
@@ -775,9 +757,8 @@ struct PlayView: View {
                 }
             }
             .padding(.vertical, 2)
-        } else if editModeSectionPattern.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) != nil
-                  || trimmed.hasPrefix("{start_of_") {
-            Text(editModeSectionName(trimmed).uppercased())
+        } else if editMode.isSectionHeader(trimmed) {
+            Text(editMode.sectionName(trimmed).uppercased())
                 .font(.system(.caption, design: .monospaced).bold())
                 .foregroundColor(Theme.sectionColor)
                 .tracking(1)
@@ -789,172 +770,12 @@ struct PlayView: View {
                 .italic()
                 .padding(.vertical, 2)
         } else {
-            Text(editModeAttributedLine(trimmed))
+            Text(editMode.attributedLine(trimmed))
                 .lineLimit(3)
                 .padding(.vertical, 2)
         }
     }
 
-    private let editModeSectionPattern = try! NSRegularExpression(
-        pattern: #"^(Chorus|Verse|Bridge|Intro|Outro|Pre-Chorus|Interlude|Solo|Tag)(\s*\d*)\s*:?\s*$"#,
-        options: .caseInsensitive
-    )
-
-    private func editModeSectionName(_ text: String) -> String {
-        if let r = text.range(of: #"(?<=:\s)[\w ]+(?=\})"#, options: .regularExpression) {
-            return String(text[r])
-        }
-        return text.hasSuffix(":") ? String(text.dropLast()).trimmingCharacters(in: .whitespaces) : text
-    }
-
-    private let editModeChordPattern = try! NSRegularExpression(pattern: #"\[([^\]]*)\]"#)
-
-    private func editModeAttributedLine(_ raw: String) -> AttributedString {
-        var result = AttributedString()
-        let ns = raw as NSString
-        let matches = editModeChordPattern.matches(in: raw, range: NSRange(location: 0, length: ns.length))
-        var lastEnd = 0
-        for match in matches {
-            let beforeLen = match.range.location - lastEnd
-            if beforeLen > 0 {
-                var part = AttributedString(ns.substring(with: NSRange(location: lastEnd, length: beforeLen)))
-                part.foregroundColor = Theme.textDim
-                part.font = Font.system(.body, design: .monospaced)
-                result += part
-            }
-            var chord = AttributedString(ns.substring(with: match.range))
-            chord.foregroundColor = Theme.accent
-            chord.font = Font.system(.body, design: .monospaced).bold()
-            result += chord
-            lastEnd = match.range.location + match.range.length
-        }
-        if lastEnd < ns.length {
-            var part = AttributedString(ns.substring(from: lastEnd))
-            part.foregroundColor = Theme.text
-            part.font = Font.system(.body, design: .monospaced)
-            result += part
-        }
-        return result
-    }
 }
 
-// MARK: - Scroll tracking
-
-struct ContentOriginKey: PreferenceKey {
-    nonisolated(unsafe) static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
-}
-
-struct LinePositionKey: PreferenceKey {
-    nonisolated(unsafe) static var defaultValue: [Int: CGFloat] = [:]
-    static func reduce(value: inout [Int: CGFloat], nextValue: () -> [Int: CGFloat]) {
-        value.merge(nextValue()) { _, new in new }
-    }
-}
-
-struct HeroHeightKey: PreferenceKey {
-    nonisolated(unsafe) static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
-// MARK: - Tab line renderer
-
-private struct TabLineView: View {
-    let text: String
-    var activeColumn: Int = 0   // reserved for future column highlighting; 0 = none
-
-    var body: some View {
-        let font = UIFont.monospacedSystemFont(ofSize: 13, weight: .regular)
-        let cw = ("0" as NSString).size(withAttributes: [.font: font]).width
-        let ch = font.lineHeight
-        let chars = Array(text)
-
-        Canvas { context, size in
-            guard !chars.isEmpty, size.width > 0 else { return }
-
-            let naturalWidth = CGFloat(chars.count) * cw
-            if naturalWidth > size.width {
-                context.concatenate(CGAffineTransform(scaleX: size.width / naturalWidth, y: 1))
-            }
-
-            let midY = size.height / 2
-            var i = 0
-
-            while i < chars.count {
-                let x = CGFloat(i) * cw
-                let c = chars[i]
-
-                if c == "-" {
-                    var j = i
-                    while j < chars.count && chars[j] == "-" { j += 1 }
-                    var p = Path()
-                    p.move(to: CGPoint(x: x, y: midY))
-                    p.addLine(to: CGPoint(x: CGFloat(j) * cw, y: midY))
-                    context.stroke(p, with: .color(Theme.textDim.opacity(0.5)), lineWidth: 0.75)
-                    i = j
-
-                } else if c == "|" {
-                    var p = Path()
-                    p.move(to: CGPoint(x: x + cw / 2, y: 0))
-                    p.addLine(to: CGPoint(x: x + cw / 2, y: size.height))
-                    context.stroke(p, with: .color(Theme.textDim.opacity(0.5)), lineWidth: 0.75)
-                    i += 1
-
-                } else if c.isNumber {
-                    var j = i
-                    while j < chars.count && chars[j].isNumber { j += 1 }
-                    let numStr = String(chars[i..<j])
-                    let numWidth = CGFloat(j - i) * cw
-
-                    var p = Path()
-                    p.move(to: CGPoint(x: x, y: midY))
-                    p.addLine(to: CGPoint(x: x + numWidth, y: midY))
-                    context.stroke(p, with: .color(Theme.textDim.opacity(0.2)), lineWidth: 0.75)
-
-                    let label = context.resolve(
-                        Text(numStr)
-                            .font(.system(size: 13, weight: .medium, design: .monospaced))
-                            .foregroundColor(Theme.text)
-                    )
-                    context.draw(label, at: CGPoint(x: x + numWidth / 2, y: midY), anchor: .center)
-                    i = j
-
-                } else {
-                    let label = context.resolve(
-                        Text(String(c))
-                            .font(.system(size: 13, weight: .regular, design: .monospaced))
-                            .foregroundColor(Theme.textDim)
-                    )
-                    context.draw(label, at: CGPoint(x: x + cw / 2, y: midY), anchor: .center)
-                    i += 1
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, minHeight: ch, maxHeight: ch)
-    }
-}
-
-// MARK: - Corner radius helper
-
-extension View {
-    func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
-        clipShape(RoundedCorner(radius: radius, corners: corners))
-    }
-}
-
-struct RoundedCorner: Shape {
-    var radius: CGFloat
-    var corners: UIRectCorner
-
-    func path(in rect: CGRect) -> Path {
-        let path = UIBezierPath(
-            roundedRect: rect,
-            byRoundingCorners: corners,
-            cornerRadii: CGSize(width: radius, height: radius)
-        )
-        return Path(path.cgPath)
-    }
-}
 

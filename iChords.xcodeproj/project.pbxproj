@@ -26,20 +26,24 @@
 		D609946314B1E459AEC20BB3 /* iChordsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FFD3EEDF3DBEBBEC770582C /* iChordsApp.swift */; };
 		D9C9B6246E134C26566856EB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FD6D6DB209519D8E8981C9FD /* Assets.xcassets */; };
 		DED990E01FA14C033EC3E869 /* ChordVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = F33383034C7BE2FECDB95DC0 /* ChordVersion.swift */; };
+		E3E3F25FD646492C6EB343BB /* PlayViewSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 603F7BB193A0C686D3926A97 /* PlayViewSupport.swift */; };
 		E8B31532875A18A632FFDFE2 /* ITunesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 760C91C06D6C251FEAE1AD21 /* ITunesService.swift */; };
 		FB85A4F2D5FDDF5DA7631FBA /* SongLineBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31EF2410AE1E6282D567E5EE /* SongLineBuilder.swift */; };
 		FF0B14F964CE355D1D70EBC3 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F8D78D9FFF7EC909B21448 /* ContentView.swift */; };
+		FFA160A87B0BED2D33BAEA59 /* EditModeController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD38463E5F1A539BDA978B7 /* EditModeController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		22AC75E68A372328D03D4DA0 /* RecentSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentSearch.swift; sourceTree = "<group>"; };
+		2CD38463E5F1A539BDA978B7 /* EditModeController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditModeController.swift; sourceTree = "<group>"; };
 		2F4AD3ECD9877DAEC078B026 /* Song.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Song.swift; sourceTree = "<group>"; };
 		31EF2410AE1E6282D567E5EE /* SongLineBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongLineBuilder.swift; sourceTree = "<group>"; };
 		43FC92B0C60D2365E4232BD2 /* SongLine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongLine.swift; sourceTree = "<group>"; };
 		4FFD3EEDF3DBEBBEC770582C /* iChordsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iChordsApp.swift; sourceTree = "<group>"; };
 		569BDECE6613E034C02DFCAC /* SongsterrService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongsterrService.swift; sourceTree = "<group>"; };
 		580A9F946CDAD0E6D407B8E7 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
-		690ED3ABE593D7C9C90E7625 /* iChords.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = iChords.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		603F7BB193A0C686D3926A97 /* PlayViewSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayViewSupport.swift; sourceTree = "<group>"; };
+		690ED3ABE593D7C9C90E7625 /* iChords.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = iChords.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6F4F3C3DCB1EF5445F7AE0A8 /* ChordProParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChordProParser.swift; sourceTree = "<group>"; };
 		760C91C06D6C251FEAE1AD21 /* ITunesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ITunesService.swift; sourceTree = "<group>"; };
 		7786D3B8BF38061F882F90B3 /* SongLineEditing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongLineEditing.swift; sourceTree = "<group>"; };
@@ -135,8 +139,10 @@
 			children = (
 				A22DE5D443B37FD21E2B12F8 /* ChordsTextEditor.swift */,
 				A1E778DC5854EBBE8B16ECD7 /* EditChordsView.swift */,
+				2CD38463E5F1A539BDA978B7 /* EditModeController.swift */,
 				DECBBA7470008D4082B14FB2 /* LibraryView.swift */,
 				B5D423FBCE9DB2E5CB57958F /* PlayView.swift */,
+				603F7BB193A0C686D3926A97 /* PlayViewSupport.swift */,
 				F4AE83CF6FC70C95B308CC9C /* SearchView.swift */,
 				7786D3B8BF38061F882F90B3 /* SongLineEditing.swift */,
 			);
@@ -174,6 +180,7 @@
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
 					5B3A4DA0F69EC7A6A5665E60 = {
+						DevelopmentTeam = DKW9QGFSBH;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -219,9 +226,11 @@
 				35CE87A40F76928131AFFDB6 /* ChordsTextEditor.swift in Sources */,
 				FF0B14F964CE355D1D70EBC3 /* ContentView.swift in Sources */,
 				5B6937B91AFB39362D199E69 /* EditChordsView.swift in Sources */,
+				FFA160A87B0BED2D33BAEA59 /* EditModeController.swift in Sources */,
 				E8B31532875A18A632FFDFE2 /* ITunesService.swift in Sources */,
 				4CC5F9900F137F7B45FF5275 /* LibraryView.swift in Sources */,
 				58D34ADD48E752DB809FEE94 /* PlayView.swift in Sources */,
+				E3E3F25FD646492C6EB343BB /* PlayViewSupport.swift in Sources */,
 				1EBF9D5C0A1AD4A959DD3A75 /* PlaybackEngine.swift in Sources */,
 				AEA29C2F5E314A2D76416456 /* RecentSearch.swift in Sources */,
 				C1F4307152A9787756F75B4B /* SchemaVersions.swift in Sources */,
@@ -367,7 +376,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = B35KKCQC55;
+				DEVELOPMENT_TEAM = DKW9QGFSBH;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
@@ -391,7 +400,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = B35KKCQC55;
+				DEVELOPMENT_TEAM = DKW9QGFSBH;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
