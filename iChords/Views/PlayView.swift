@@ -1,5 +1,7 @@
 import SwiftUI
 import SwiftData
+import OSLog
+
 
 struct PlayView: View {
     @Environment(\.modelContext) private var modelContext
@@ -14,9 +16,12 @@ struct PlayView: View {
     @State private var userScrolling = false
     @State private var wasPlayingBeforeScroll = false
     @State private var scrollProxy: ScrollViewProxy?
+    @State private var scrollEndTask: Task<Void, Never>? = nil
     @State private var linePositions: [Int: CGFloat] = [:]
-    @State private var scrollViewCenter: CGFloat = UIScreen.main.bounds.height * 0.5
+    @State private var scrollViewCenter: CGFloat = UIScreen.main.bounds.height * 0.25
     @State private var heroHeight: CGFloat = 0
+
+    @State private var isRecording = false
 
     // Edit mode
     @State private var isEditing = false
@@ -26,9 +31,6 @@ struct PlayView: View {
     // Lookup tables built from SongLines during loadSong()
     @State private var parsedToSongLine: [Int: Int] = [:]   // parsedLineIndex → songLineIndex
     @State private var skippedParsedLines: Set<Int> = []    // secondary lines in tab groups
-
-    // Fraction of scroll view height used as the playback anchor (0.5 = centre)
-    private let playbackAnchorFraction: CGFloat = 0.5
 
     var body: some View {
         VStack(spacing: 0) {
@@ -113,9 +115,6 @@ struct PlayView: View {
                 }
             )
         }
-        .onChange(of: engine.speed) { _, newSpeed in
-            song.speed = newSpeed
-        }
     }
 
     private func songContent(_ parsed: ParsedSong) -> some View {
@@ -127,14 +126,6 @@ struct PlayView: View {
                     Spacer()
                         .frame(height: UIScreen.main.bounds.height * 0.7)
                 }
-                .background(
-                    GeometryReader { geo in
-                        Color.clear.preference(
-                            key: ScrollOffsetKey.self,
-                            value: geo.frame(in: .named("scroll")).midY
-                        )
-                    }
-                )
             }
             .coordinateSpace(name: "scroll")
             .onAppear {
@@ -151,37 +142,48 @@ struct PlayView: View {
                     }
                 }
             }
+            .onPreferenceChange(ContentOriginKey.self) { originY in
+                guard originY > 1 else { return }
+                scrollViewCenter = UIScreen.main.bounds.height / 2 - originY
+            }
             .onPreferenceChange(LinePositionKey.self) { positions in
                 linePositions = positions
             }
             .onPreferenceChange(HeroHeightKey.self) { h in
                 heroHeight = h
             }
-            .overlay(
-                GeometryReader { geo in
-                    TouchInterceptView(
-                        onTouchBegan: {
+            .onScrollGeometryChange(for: CGFloat.self) { geo in
+                geo.contentOffset.y
+            } action: { _, _ in
+                guard userScrolling else { return }
+                updateLiveCursor()
+                scheduleScrollEnd()
+            }
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        if !userScrolling {
                             wasPlayingBeforeScroll = engine.isPlaying
                             engine.pause()
                             userScrolling = true
-                        },
-                        onTouchEnded: {},
-                        onScrollEnd: {
-                            userScrolling = false
-                            scrollToLine(engine.activeSongLineIndex)
-                            if wasPlayingBeforeScroll {
-                                engine.play()
-                            }
-                        },
-                        onScroll: {
-                            if userScrolling { updateLiveCursor() }
                         }
-                    )
-                    .onAppear {
-                        scrollViewCenter = geo.size.height * playbackAnchorFraction
                     }
-                }
+                    .onEnded { _ in
+                        scheduleScrollEnd()
+                    }
             )
+        }
+    }
+
+    private func scheduleScrollEnd() {
+        scrollEndTask?.cancel()
+        scrollEndTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
+            userScrolling = false
+            if wasPlayingBeforeScroll {
+                engine.play()
+            }
         }
     }
 
@@ -197,10 +199,13 @@ struct PlayView: View {
     private func updateLiveCursor() {
         guard !linePositions.isEmpty else { return }
         let anchor = scrollViewCenter
-        let chordLineIndices = Set(
-            engine.songLines.indices.filter { engine.songLines[$0].beats.contains { $0.index > 0 } }
+        let candidateIndices = Set(
+            engine.songLines.indices.filter {
+                engine.songLines[$0].kind == .tab ||
+                engine.songLines[$0].beats.contains { $0.index > 0 }
+            }
         )
-        let chordPositions = linePositions.filter { chordLineIndices.contains($0.key) }
+        let chordPositions = linePositions.filter { candidateIndices.contains($0.key) }
         guard !chordPositions.isEmpty else { return }
 
         let slIdx: Int
@@ -282,7 +287,9 @@ struct PlayView: View {
         .padding(.bottom, 12)
         .background(
             GeometryReader { geo in
-                Color.clear.preference(key: HeroHeightKey.self, value: geo.size.height)
+                Color.clear
+                    .preference(key: HeroHeightKey.self, value: geo.size.height)
+                    .preference(key: ContentOriginKey.self, value: geo.frame(in: .global).minY)
             }
         )
     }
@@ -290,7 +297,7 @@ struct PlayView: View {
     @ViewBuilder
     private func songLines(_ parsed: ParsedSong) -> some View {
         // Ensure the first song line sits at the vertical centre when scrolled all the way to the top.
-        let topPad = max(0, scrollViewCenter - heroHeight)
+        let topPad = heroHeight // max(0, scrollViewCenter - heroHeight)
         if topPad > 0 {
             Color.clear.frame(height: topPad)
         }
@@ -329,6 +336,10 @@ struct PlayView: View {
     private func songLineContent(lineIdx: Int, slIdx: Int, line: ChordProLine, sl: SongLine, parsed: ParsedSong, isActive: Bool) -> some View {
         let isTab = sl.kind == .tab
         let isProse = !isTab && ChordProParser.isProseLine(line)
+        let isWholeLineBeat = isRecording && sl.beats.contains { $0.index == 0 }
+        let recordBeatFlatIndices: Set<Int> = isRecording
+            ? Set(sl.beats.filter { $0.index > 0 }.map { sl.chordStartIndex + $0.index - 1 })
+            : []
 
         Group {
             if isTab {
@@ -340,7 +351,16 @@ struct PlayView: View {
             } else if isProse {
                 proseLine(line)
             } else {
-                chordLine(chunks: line.chunks, chordStartIndex: sl.chordStartIndex, isActiveLine: isActive)
+                chordLine(
+                    chunks: line.chunks,
+                    chordStartIndex: sl.chordStartIndex,
+                    isActiveLine: isActive,
+                    slIdx: slIdx,
+                    recordBeatFlatIndices: recordBeatFlatIndices,
+                    onBeatTap: { flatIdx in
+                        deleteBeat(slIdx: slIdx, beatIndex: flatIdx - sl.chordStartIndex + 1)
+                    }
+                )
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -355,6 +375,9 @@ struct PlayView: View {
                     .fill(isActive ? Theme.accent.opacity(0.06) : .clear)
             }
         )
+        .overlay {
+            if isWholeLineBeat { Color.red.opacity(0.12) }
+        }
         .cornerRadius(4)
         .padding(.horizontal, 10) // outer screen margin — outside the background
         .id("songline-\(slIdx)")
@@ -368,8 +391,12 @@ struct PlayView: View {
             }
         )
         .onTapGesture {
-            engine.seek(toLine: slIdx)
-            scrollToLine(slIdx)
+            if isWholeLineBeat {
+                deleteBeat(slIdx: slIdx, beatIndex: 0)
+            } else {
+                engine.seek(toLine: slIdx)
+                scrollToLine(slIdx)
+            }
         }
     }
 
@@ -411,7 +438,7 @@ struct PlayView: View {
         let chordIdx: Int?
     }
 
-    private func chordLine(chunks: [ChordChunk], chordStartIndex: Int, isActiveLine: Bool) -> some View {
+    private func chordLine(chunks: [ChordChunk], chordStartIndex: Int, isActiveLine: Bool, slIdx: Int = 0, recordBeatFlatIndices: Set<Int> = [], onBeatTap: ((Int) -> Void)? = nil) -> some View {
         let words: [WordItem] = {
             var items: [WordItem] = []
             var ci = chordStartIndex
@@ -444,17 +471,18 @@ struct PlayView: View {
 
         return FlowLayout(spacing: 0) {
             ForEach(words) { item in
+                let isBeatTarget = item.chordIdx.map { recordBeatFlatIndices.contains($0) } ?? false
                 VStack(alignment: .leading, spacing: 1) {
                     if let chord = item.chord, let ci = item.chordIdx {
                         let isActive = ci == engine.activeFlatChordIndex
                         Text(chord)
                             .font(.system(.caption, design: .monospaced).bold())
-                            .foregroundColor(isActive ? .black : Theme.accent)
+                            .foregroundColor(isActive ? .black : (isBeatTarget ? .red : Theme.accent))
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
                             .background(
                                 RoundedRectangle(cornerRadius: 3)
-                                    .fill(isActive ? Theme.accent : Theme.chordBg)
+                                    .fill(isActive ? Theme.accent : (isBeatTarget ? Color.red.opacity(0.15) : Theme.chordBg))
                             )
                             .shadow(color: isActive ? Theme.accentGlow : .clear, radius: 5)
                     } else {
@@ -467,83 +495,86 @@ struct PlayView: View {
 
                     Text(item.word.isEmpty ? " " : item.word)
                         .font(.system(.body, design: .monospaced))
-                        .foregroundColor(isActiveLine ? Theme.text : Theme.textDim)
+                        .foregroundColor(isBeatTarget ? .red : (isActiveLine ? Theme.text : Theme.textDim))
                         .fixedSize(horizontal: true, vertical: false)
                 }
                 .padding(.trailing, item.word.trimmingCharacters(in: .whitespaces).isEmpty ? 8 : 0)
+                .overlay {
+                    if isRecording && engine.isPlaying, let ci = item.chordIdx {
+                        // Record+playing: tap any forward chord to stamp timing
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                let beatValue = ci - chordStartIndex + 1
+                                if engine.recordTap(atLine: slIdx, beatValue: beatValue) {
+                                    song.linesData = try? JSONEncoder().encode(engine.songLines)
+                                }
+                            }
+                    } else if isBeatTarget {
+                        // Record+paused: tap existing beat targets to delete them
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                if let ci = item.chordIdx { onBeatTap?(ci) }
+                            }
+                    }
+                }
             }
         }
     }
 
     private var controls: some View {
-        HStack(spacing: 8) {
-            Button {
-                engine.skipBack()
-                scrollToLine(engine.activeSongLineIndex)
-            } label: {
-                Image(systemName: "backward.end.fill")
-                    .font(.body)
-                    .foregroundColor(Theme.text)
-                    .frame(width: 44, height: 44)
-                    .background(Circle().stroke(Theme.surface2, lineWidth: 1))
-            }
-
-            Button {
-                engine.togglePlay()
-                if engine.isPlaying && !sessionRecorded {
-                    sessionRecorded = true
-                    song.recordSession()
+        HStack {
+            HStack(spacing: 8) {
+                Button {
+                    engine.skipBack()
+                    scrollToLine(engine.activeSongLineIndex)
+                } label: {
+                    Image(systemName: "backward.end.fill")
+                        .font(.body)
+                        .foregroundColor(Theme.text)
+                        .frame(width: 44, height: 44)
+                        .background(Circle().stroke(Theme.surface2, lineWidth: 1))
                 }
-            } label: {
-                Image(systemName: engine.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.title3)
-                    .foregroundColor(engine.isPlaying ? Theme.accent : .black)
-                    .frame(width: 56, height: 56)
-                    .background(
-                        Circle()
-                            .fill(engine.isPlaying ? Theme.surface2 : Theme.accent)
-                    )
-            }
 
-            Button {
-                engine.skipForward()
-                scrollToLine(engine.activeSongLineIndex)
-            } label: {
-                Image(systemName: "forward.end.fill")
-                    .font(.body)
-                    .foregroundColor(Theme.text)
-                    .frame(width: 44, height: 44)
-                    .background(Circle().stroke(Theme.surface2, lineWidth: 1))
+                Button {
+                    engine.togglePlay()
+                    if engine.isPlaying && !sessionRecorded {
+                        sessionRecorded = true
+                        song.recordSession()
+                    }
+                } label: {
+                    Image(systemName: engine.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.title3)
+                        .foregroundColor(engine.isPlaying ? Theme.accent : .black)
+                        .frame(width: 56, height: 56)
+                        .background(
+                            Circle()
+                                .fill(engine.isPlaying ? Theme.surface2 : Theme.accent)
+                        )
+                }
+
+                Button {
+                    engine.skipForward()
+                    scrollToLine(engine.activeSongLineIndex)
+                } label: {
+                    Image(systemName: "forward.end.fill")
+                        .font(.body)
+                        .foregroundColor(Theme.text)
+                        .frame(width: 44, height: 44)
+                        .background(Circle().stroke(Theme.surface2, lineWidth: 1))
+                }
             }
 
             Spacer()
 
-            HStack(spacing: 6) {
-                Button {
-                    engine.speed = max(0.05, (engine.speed * 100 - 5).rounded() / 100)
-                } label: {
-                    Image(systemName: "minus")
-                        .font(.caption)
-                        .foregroundColor(Theme.text)
-                        .frame(width: 32, height: 32)
-                        .background(Circle().stroke(Theme.surface2, lineWidth: 1))
-                }
-
-                Text(String(format: "%.2fx", engine.speed))
-                    .font(.caption)
-                    .foregroundColor(Theme.textDim)
-                    .monospacedDigit()
-                    .frame(minWidth: 36)
-
-                Button {
-                    engine.speed = min(5.0, (engine.speed * 100 + 5).rounded() / 100)
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.caption)
-                        .foregroundColor(Theme.text)
-                        .frame(width: 32, height: 32)
-                        .background(Circle().stroke(Theme.surface2, lineWidth: 1))
-                }
+            Button {
+                isRecording.toggle()
+            } label: {
+                Image(systemName: isRecording ? "record.circle.fill" : "record.circle")
+                    .font(.title2)
+                    .foregroundColor(isRecording ? .red : Theme.textDim)
+                    .frame(width: 44, height: 44)
             }
         }
         .padding(.horizontal, 10)
@@ -559,13 +590,17 @@ struct PlayView: View {
 
     // MARK: - Helpers
 
+    private func deleteBeat(slIdx: Int, beatIndex: Int) {
+        engine.removeBeat(fromLine: slIdx, withBeatIndex: beatIndex)
+        song.linesData = try? JSONEncoder().encode(engine.songLines)
+    }
+
     private func loadSong() {
         let parsed = ChordProParser.parse(song.chords)
         var result = parsed
         if result.artist == nil { result.artist = song.artist }
         if result.title == nil { result.title = song.title }
         parsedSong = result
-        engine.speed = song.speed
 
         let lines = song.ensureSongLines(for: result)
         engine.configure(lines: lines)
@@ -805,11 +840,9 @@ struct PlayView: View {
 
 // MARK: - Scroll tracking
 
-struct ScrollOffsetKey: PreferenceKey {
+struct ContentOriginKey: PreferenceKey {
     nonisolated(unsafe) static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
 struct LinePositionKey: PreferenceKey {
@@ -924,3 +957,4 @@ struct RoundedCorner: Shape {
         return Path(path.cgPath)
     }
 }
+

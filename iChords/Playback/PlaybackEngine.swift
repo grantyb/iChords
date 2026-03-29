@@ -6,7 +6,6 @@ final class PlaybackEngine {
     var isPlaying = false
     var activeSongLineIndex = 0
     var activeBeatIndex = 0   // index into the current SongLine's beats array
-    var speed: Double = 1.0
 
     private(set) var songLines: [SongLine] = []
     private(set) var paragraphStarts: [Int] = []  // SongLine indices that begin a paragraph
@@ -112,13 +111,98 @@ final class PlaybackEngine {
         elapsed = 0
     }
 
+    /// In record mode during playback: records the elapsed duration for the current beat,
+    /// deletes all beats between the current one (exclusive) and the tapped position (inclusive),
+    /// and inserts a new 0-duration beat at the tapped position, then seeks there.
+    /// Returns true if the tap was handled (i.e. the position is forward of the current beat).
+    @discardableResult
+    func recordTap(atLine tappedSlIdx: Int, beatValue tappedBeatValue: Int) -> Bool {
+        guard isPlaying, activeSongLineIndex < songLines.count else { return false }
+        let currentSLIdx = activeSongLineIndex
+        let currentBeatArrayIdx = activeBeatIndex
+        let currentSL = songLines[currentSLIdx]
+        guard currentBeatArrayIdx < currentSL.beats.count else { return false }
+        let currentBeatValue = currentSL.beats[currentBeatArrayIdx].index
+
+        // Verify tapped position is forward of current beat
+        if tappedSlIdx < currentSLIdx { return false }
+        if tappedSlIdx == currentSLIdx, tappedBeatValue <= currentBeatValue { return false }
+
+        // 1. Stamp current beat's duration with elapsed time
+        let elapsedMs = max(1, Int(elapsed * 1000))
+        var currentBeats = currentSL.beats
+        currentBeats[currentBeatArrayIdx] = SongBeat(index: currentBeatValue, durationMs: elapsedMs)
+
+        if tappedSlIdx == currentSLIdx {
+            // Same line: drop beats between current (exclusive) and tapped (inclusive)
+            let kept = currentBeats.enumerated().compactMap { idx, beat -> SongBeat? in
+                (idx <= currentBeatArrayIdx || beat.index > tappedBeatValue) ? beat : nil
+            }
+            songLines[currentSLIdx] = withBeats(kept, in: songLines[currentSLIdx])
+        } else {
+            // Trim current line to just up through the current beat
+            songLines[currentSLIdx] = withBeats(Array(currentBeats.prefix(currentBeatArrayIdx + 1)),
+                                                 in: songLines[currentSLIdx])
+            // Clear all intermediate lines
+            for idx in (currentSLIdx + 1)..<tappedSlIdx {
+                songLines[idx] = withBeats([], in: songLines[idx])
+            }
+            // Drop beats up to and including tappedBeatValue from the tapped line
+            let kept = songLines[tappedSlIdx].beats.filter { $0.index > tappedBeatValue }
+            songLines[tappedSlIdx] = withBeats(kept, in: songLines[tappedSlIdx])
+        }
+
+        // 2. Insert new 0-duration beat at tapped position
+        var tslBeats = songLines[tappedSlIdx].beats
+        let insertIdx = tslBeats.firstIndex(where: { $0.index > tappedBeatValue }) ?? tslBeats.count
+        tslBeats.insert(SongBeat(index: tappedBeatValue, durationMs: 0), at: insertIdx)
+        songLines[tappedSlIdx] = withBeats(tslBeats, in: songLines[tappedSlIdx])
+
+        // 3. Seek to the new beat
+        activeSongLineIndex = tappedSlIdx
+        activeBeatIndex = insertIdx
+        elapsed = 0
+        return true
+    }
+
+    private func withBeats(_ beats: [SongBeat], in sl: SongLine) -> SongLine {
+        SongLine(kind: sl.kind, parsedLineIndex: sl.parsedLineIndex,
+                 parsedLineCount: sl.parsedLineCount, chordStartIndex: sl.chordStartIndex,
+                 beats: beats)
+    }
+
+    func removeBeat(fromLine slIdx: Int, withBeatIndex beatIndex: Int) {
+        guard slIdx < songLines.count else { return }
+        let sl = songLines[slIdx]
+        let newBeats = sl.beats.filter { $0.index != beatIndex }
+        songLines[slIdx] = SongLine(
+            kind: sl.kind,
+            parsedLineIndex: sl.parsedLineIndex,
+            parsedLineCount: sl.parsedLineCount,
+            chordStartIndex: sl.chordStartIndex,
+            beats: newBeats
+        )
+    }
+
     private func tick() {
-        guard !songLines.isEmpty, activeSongLineIndex < songLines.count else { return }
+        guard !songLines.isEmpty else { return }
+
+        // Advance past any lines that have no beats.
+        while activeSongLineIndex < songLines.count && songLines[activeSongLineIndex].beats.isEmpty {
+            activeSongLineIndex += 1
+            activeBeatIndex = 0
+            elapsed = 0
+        }
+        guard activeSongLineIndex < songLines.count else { pause(); return }
+
         elapsed += 1.0 / 30.0
 
         let sl = songLines[activeSongLineIndex]
+        // Clamp beat index in case beats were deleted mid-line.
+        if activeBeatIndex >= sl.beats.count { activeBeatIndex = sl.beats.count - 1 }
         let beat = sl.beats[activeBeatIndex]
-        let durationSec = Double(beat.durationMs) / 1000.0 / speed
+        let durationSec = Double(beat.durationMs) / 1000.0
+        guard beat.durationMs > 0 else { return }  // stall; elapsed keeps accumulating for record mode
 
         guard elapsed >= durationSec else { return }
         elapsed = 0

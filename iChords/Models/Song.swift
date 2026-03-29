@@ -12,7 +12,6 @@ final class Song {
     var titleSlug: String
     var chords: String
     var artworkUrl: String?
-    var speed: Double
     var sessionCount: Int
     var isFavourite: Bool
     var createdAt: Date
@@ -30,8 +29,7 @@ final class Song {
         artistSlug: String,
         titleSlug: String,
         chords: String,
-        artworkUrl: String? = nil,
-        speed: Double = 1.0
+        artworkUrl: String? = nil
     ) {
         self.id = UUID()
         self.source = source
@@ -42,7 +40,6 @@ final class Song {
         self.titleSlug = titleSlug
         self.chords = chords
         self.artworkUrl = artworkUrl
-        self.speed = speed
         self.sessionCount = 0
         self.isFavourite = false
         self.createdAt = Date()
