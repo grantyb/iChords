@@ -47,10 +47,15 @@ struct StalledIndicator: View {
 
 // MARK: - Tab line renderer
 
+struct TabBeatHighlight {
+    let range: Range<Int>  // body-relative column range (after the first `|`)
+    let color: Color
+    let isActive: Bool     // true = bright/full; false = dim
+}
+
 struct TabLineView: View {
     let text: String
-    var highlightRange: Range<Int>? = nil  // body-relative column range (after the first `|`)
-    var highlightColor: Color = .clear
+    var highlights: [TabBeatHighlight] = []
     var onColumnTap: ((Int) -> Void)? = nil  // called with absolute char column
 
     var body: some View {
@@ -59,11 +64,12 @@ struct TabLineView: View {
         let ch = font.lineHeight
         let chars = Array(text)
 
-        // Shift body-relative range to account for the leading "E|" prefix
-        let absRange: Range<Int>? = highlightRange.flatMap { bodyRange in
-            guard let pipePos = chars.firstIndex(of: "|") else { return nil }
-            let offset = pipePos + 1
-            return (bodyRange.lowerBound + offset)..<(bodyRange.upperBound + offset)
+        // Convert body-relative ranges to absolute column ranges once.
+        let pipeOffset: Int = (chars.firstIndex(of: "|").map { $0 + 1 }) ?? 0
+        let absHighlights: [(range: Range<Int>, color: Color, isActive: Bool)] = highlights.map { h in
+            let lo = h.range.lowerBound + pipeOffset
+            let hi = h.range.upperBound + pipeOffset
+            return (lo..<hi, h.color, h.isActive)
         }
 
         GeometryReader { geo in
@@ -75,14 +81,18 @@ struct TabLineView: View {
                 context.concatenate(CGAffineTransform(scaleX: size.width / naturalWidth, y: 1))
             }
 
-            // Draw highlight background behind the active column
-            if let range = absRange, !range.isEmpty {
-                let x = CGFloat(range.lowerBound) * cw
-                let w = CGFloat(range.count) * cw
-                context.fill(
-                    Path(CGRect(x: x, y: 0, width: w, height: size.height)),
-                    with: .color(highlightColor.opacity(0.2))
-                )
+            // Draw highlight backgrounds (dim beats first, active beat on top).
+            for h in absHighlights where !h.isActive && !h.range.isEmpty {
+                let x = CGFloat(h.range.lowerBound) * cw
+                let w = CGFloat(h.range.count) * cw
+                context.fill(Path(CGRect(x: x, y: 0, width: w, height: size.height)),
+                             with: .color(h.color.opacity(0.12)))
+            }
+            for h in absHighlights where h.isActive && !h.range.isEmpty {
+                let x = CGFloat(h.range.lowerBound) * cw
+                let w = CGFloat(h.range.count) * cw
+                context.fill(Path(CGRect(x: x, y: 0, width: w, height: size.height)),
+                             with: .color(h.color.opacity(0.30)))
             }
 
             let midY = size.height / 2
@@ -113,17 +123,22 @@ struct TabLineView: View {
                     while j < chars.count && chars[j].isNumber { j += 1 }
                     let numStr = String(chars[i..<j])
                     let numWidth = CGFloat(j - i) * cw
-                    let isHighlighted = absRange.map { $0.contains(i) } ?? false
 
                     var p = Path()
                     p.move(to: CGPoint(x: x, y: midY))
                     p.addLine(to: CGPoint(x: x + numWidth, y: midY))
                     context.stroke(p, with: .color(Theme.textDim.opacity(0.2)), lineWidth: 0.75)
 
+                    let numColor: Color = {
+                        if let h = absHighlights.first(where: { $0.range.contains(i) }) {
+                            return h.isActive ? h.color : h.color.opacity(0.6)
+                        }
+                        return Theme.text
+                    }()
                     let label = context.resolve(
                         Text(numStr)
                             .font(.system(size: 13, weight: .medium, design: .monospaced))
-                            .foregroundColor(isHighlighted ? highlightColor : Theme.text)
+                            .foregroundColor(numColor)
                     )
                     context.draw(label, at: CGPoint(x: x + numWidth / 2, y: midY), anchor: .center)
                     i = j

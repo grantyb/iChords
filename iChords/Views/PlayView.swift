@@ -335,15 +335,24 @@ struct PlayView: View {
 
         Group {
             if isTab {
-                let tabHighlight: (Range<Int>?, Color) = {
-                    guard isActive, engine.activeBeatIndex < sl.beats.count else { return (nil, .clear) }
-                    let beat = sl.beats[engine.activeBeatIndex]
-                    guard beat.index > 0 else { return (nil, .clear) }
-                    let color: Color = engine.isRecording
-                        ? (beat.durationMs == nil ? .red : .green)
-                        : Theme.accent
-                    let range = SongLineBuilder.beatColumnRange(for: beat.index, in: sl, parsed: parsed)
-                    return (range, color)
+                let tabHighlights: [TabBeatHighlight] = {
+                    if engine.isRecording {
+                        return sl.beats.enumerated().compactMap { (beatArrayIdx, beat) -> TabBeatHighlight? in
+                            guard beat.index > 0 else { return nil }
+                            guard let range = SongLineBuilder.beatColumnRange(for: beat.index, in: sl, parsed: parsed) else { return nil }
+                            let color: Color = beat.durationMs != nil ? .green : .red
+                            let beatIsActive = isActive && beatArrayIdx == engine.activeBeatIndex
+                            return TabBeatHighlight(range: range, color: color, isActive: beatIsActive)
+                        }
+                    } else if isActive {
+                        guard engine.activeBeatIndex < sl.beats.count else { return [] }
+                        let beat = sl.beats[engine.activeBeatIndex]
+                        guard beat.index > 0 else { return [] }
+                        guard let range = SongLineBuilder.beatColumnRange(for: beat.index, in: sl, parsed: parsed) else { return [] }
+                        return [TabBeatHighlight(range: range, color: Theme.accent, isActive: true)]
+                    } else {
+                        return []
+                    }
                 }()
                 let pipeOffset: Int = {
                     let chars = Array(parsed.lines[sl.parsedLineIndex].chunks.first?.lyric ?? "")
@@ -361,7 +370,7 @@ struct PlayView: View {
                 }
                 VStack(spacing: 0) {
                     ForEach(sl.parsedLineIndex..<(sl.parsedLineIndex + sl.parsedLineCount), id: \.self) { tabIdx in
-                        tabLine(parsed.lines[tabIdx], highlightRange: tabHighlight.0, highlightColor: tabHighlight.1, onColumnTap: onColumnTap)
+                        tabLine(parsed.lines[tabIdx], highlights: tabHighlights, onColumnTap: onColumnTap)
                     }
                 }
             } else {
@@ -426,9 +435,9 @@ struct PlayView: View {
             .padding(.horizontal, 16)
     }
 
-    private func tabLine(_ line: ChordProLine, highlightRange: Range<Int>? = nil, highlightColor: Color = .clear, onColumnTap: ((Int) -> Void)? = nil) -> some View {
+    private func tabLine(_ line: ChordProLine, highlights: [TabBeatHighlight] = [], onColumnTap: ((Int) -> Void)? = nil) -> some View {
         let text = line.chunks.first?.lyric ?? ""
-        return TabLineView(text: text, highlightRange: highlightRange, highlightColor: highlightColor, onColumnTap: onColumnTap)
+        return TabLineView(text: text, highlights: highlights, onColumnTap: onColumnTap)
     }
 
     private struct WordItem: Identifiable {
