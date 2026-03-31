@@ -578,24 +578,20 @@ struct PlayView: View {
             Spacer()
 
             let durationMs = engine.currentBeatDurationMs
-            Button {
-                engine.deleteCurrentBeat()
-                scrollToLine(engine.activeSongLineIndex)
-                song.linesData = try? JSONEncoder().encode(engine.songLines)
-            } label: {
-                Image(systemName: "xmark.circle")
-                    .font(.caption)
-                    .foregroundColor(Theme.textDim)
-                    .frame(width: 28, height: 28)
-            }
             if isEditingBeatDuration {
+                Button("Cancel") {
+                    beatEditCanceled = true
+                    beatDurationFocused = false
+                }
+                .font(.caption)
+                .foregroundColor(Theme.textDim)
                 TextField("ms", text: $beatDurationInput)
                     .keyboardType(.numberPad)
                     .focused($beatDurationFocused)
                     .font(.system(.caption, design: .monospaced))
                     .foregroundColor(Theme.text)
-                    .multilineTextAlignment(.trailing)
-                    .frame(width: 64)
+                    .multilineTextAlignment(.center)
+                    .frame(width: 56)
                     .onSubmit { commitBeatDurationEdit() }
                     .onChange(of: beatDurationFocused) { _, focused in
                         guard !focused else { return }
@@ -606,22 +602,22 @@ struct PlayView: View {
                             commitBeatDurationEdit()
                         }
                     }
-                    .toolbar {
-                        ToolbarItemGroup(placement: .keyboard) {
-                            Button("Cancel") {
-                                beatEditCanceled = true
-                                beatDurationFocused = false
-                            }
-                            .foregroundColor(Theme.textDim)
-                            Spacer()
-                            Button("Done") {
-                                commitBeatDurationEdit()
-                            }
-                            .fontWeight(.semibold)
-                            .foregroundColor(Theme.accent)
-                        }
-                    }
+                Button("Done") {
+                    commitBeatDurationEdit()
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundColor(Theme.accent)
             } else {
+                Button {
+                    engine.deleteCurrentBeat()
+                    scrollToLine(engine.activeSongLineIndex)
+                    song.linesData = try? JSONEncoder().encode(engine.songLines)
+                } label: {
+                    Image(systemName: "xmark.circle")
+                        .font(.caption)
+                        .foregroundColor(Theme.textDim)
+                        .frame(width: 28, height: 28)
+                }
                 Text(durationMs.map { "\($0) ms" } ?? "-- ms")
                     .font(.system(.caption, design: .monospaced))
                     .foregroundColor(Theme.textDim)
