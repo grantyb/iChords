@@ -335,9 +335,33 @@ struct PlayView: View {
 
         Group {
             if isTab {
+                let tabHighlight: (Range<Int>?, Color) = {
+                    guard isActive, engine.activeBeatIndex < sl.beats.count else { return (nil, .clear) }
+                    let beat = sl.beats[engine.activeBeatIndex]
+                    guard beat.index > 0 else { return (nil, .clear) }
+                    let color: Color = engine.isRecording
+                        ? (beat.durationMs == nil ? .red : .green)
+                        : Theme.accent
+                    let range = SongLineBuilder.beatColumnRange(for: beat.index, in: sl, parsed: parsed)
+                    return (range, color)
+                }()
+                let pipeOffset: Int = {
+                    let chars = Array(parsed.lines[sl.parsedLineIndex].chunks.first?.lyric ?? "")
+                    return (chars.firstIndex(of: "|") ?? -1) + 1
+                }()
+                let onColumnTap: (Int) -> Void = { col in
+                    let bodyCol = col - pipeOffset
+                    if bodyCol >= 0,
+                       let beatIdx = SongLineBuilder.beatIndex(atBodyColumn: bodyCol, in: sl, parsed: parsed) {
+                        engine.seek(toLine: slIdx, beatValue: beatIdx)
+                    } else {
+                        engine.seek(toLine: slIdx, beatValue: sl.beats.first?.index ?? 1)
+                    }
+                    scrollToLine(slIdx)
+                }
                 VStack(spacing: 0) {
                     ForEach(sl.parsedLineIndex..<(sl.parsedLineIndex + sl.parsedLineCount), id: \.self) { tabIdx in
-                        tabLine(parsed.lines[tabIdx])
+                        tabLine(parsed.lines[tabIdx], highlightRange: tabHighlight.0, highlightColor: tabHighlight.1, onColumnTap: onColumnTap)
                     }
                 }
             } else {
@@ -378,7 +402,7 @@ struct PlayView: View {
             }
         )
         .onTapGesture {
-            engine.seek(toLine: slIdx, beatValue: 0)
+            engine.seek(toLine: slIdx, beatValue: sl.beats.first?.index ?? 0)
             scrollToLine(slIdx)
         }
     }
@@ -402,9 +426,9 @@ struct PlayView: View {
             .padding(.horizontal, 16)
     }
 
-    private func tabLine(_ line: ChordProLine) -> some View {
+    private func tabLine(_ line: ChordProLine, highlightRange: Range<Int>? = nil, highlightColor: Color = .clear, onColumnTap: ((Int) -> Void)? = nil) -> some View {
         let text = line.chunks.first?.lyric ?? ""
-        return TabLineView(text: text, activeColumn: 0)
+        return TabLineView(text: text, highlightRange: highlightRange, highlightColor: highlightColor, onColumnTap: onColumnTap)
     }
 
     private struct WordItem: Identifiable {
@@ -449,7 +473,7 @@ struct PlayView: View {
             ForEach(words) { item in
                 let beatDuration = item.chordIdx.flatMap { recordBeatDurations[$0] }
                 let isBeatTarget = beatDuration != nil
-                let beatColor: Color = beatDuration == 0 ? .red : .green
+                let beatColor: Color = beatDuration == nil ? .red : .green
                 VStack(alignment: .leading, spacing: 1) {
                     if let chord = item.chord, let ci = item.chordIdx {
                         let isActive = ci == engine.activeFlatChordIndex
@@ -646,6 +670,11 @@ struct PlayView: View {
         }
 
         engine.configure(lines: lines)
+
+        // Debug: log beat count per song line
+        for (i, sl) in lines.enumerated() {
+            print("[iChords] songLine[\(i)] kind=\(sl.kind) parsedLineIndex=\(sl.parsedLineIndex) beats=\(sl.beats.count)")
+        }
 
         // Build lookup tables for the view
         var map: [Int: Int] = [:]

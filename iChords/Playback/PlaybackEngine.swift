@@ -34,6 +34,7 @@ final class PlaybackEngine {
     var activeFlatChordIndex: Int {
         guard !songLines.isEmpty, activeSongLineIndex < songLines.count else { return -1 }
         let sl = songLines[activeSongLineIndex]
+        guard sl.kind != .tab else { return -1 }
         guard activeBeatIndex < sl.beats.count else { return -1 }
         let beat = sl.beats[activeBeatIndex]
         guard beat.index > 0 else { return -1 }

@@ -49,7 +49,9 @@ struct StalledIndicator: View {
 
 struct TabLineView: View {
     let text: String
-    var activeColumn: Int = 0
+    var highlightRange: Range<Int>? = nil  // body-relative column range (after the first `|`)
+    var highlightColor: Color = .clear
+    var onColumnTap: ((Int) -> Void)? = nil  // called with absolute char column
 
     var body: some View {
         let font = UIFont.monospacedSystemFont(ofSize: 13, weight: .regular)
@@ -57,12 +59,30 @@ struct TabLineView: View {
         let ch = font.lineHeight
         let chars = Array(text)
 
+        // Shift body-relative range to account for the leading "E|" prefix
+        let absRange: Range<Int>? = highlightRange.flatMap { bodyRange in
+            guard let pipePos = chars.firstIndex(of: "|") else { return nil }
+            let offset = pipePos + 1
+            return (bodyRange.lowerBound + offset)..<(bodyRange.upperBound + offset)
+        }
+
+        GeometryReader { geo in
         Canvas { context, size in
             guard !chars.isEmpty, size.width > 0 else { return }
 
             let naturalWidth = CGFloat(chars.count) * cw
             if naturalWidth > size.width {
                 context.concatenate(CGAffineTransform(scaleX: size.width / naturalWidth, y: 1))
+            }
+
+            // Draw highlight background behind the active column
+            if let range = absRange, !range.isEmpty {
+                let x = CGFloat(range.lowerBound) * cw
+                let w = CGFloat(range.count) * cw
+                context.fill(
+                    Path(CGRect(x: x, y: 0, width: w, height: size.height)),
+                    with: .color(highlightColor.opacity(0.2))
+                )
             }
 
             let midY = size.height / 2
@@ -93,6 +113,7 @@ struct TabLineView: View {
                     while j < chars.count && chars[j].isNumber { j += 1 }
                     let numStr = String(chars[i..<j])
                     let numWidth = CGFloat(j - i) * cw
+                    let isHighlighted = absRange.map { $0.contains(i) } ?? false
 
                     var p = Path()
                     p.move(to: CGPoint(x: x, y: midY))
@@ -102,7 +123,7 @@ struct TabLineView: View {
                     let label = context.resolve(
                         Text(numStr)
                             .font(.system(size: 13, weight: .medium, design: .monospaced))
-                            .foregroundColor(Theme.text)
+                            .foregroundColor(isHighlighted ? highlightColor : Theme.text)
                     )
                     context.draw(label, at: CGPoint(x: x + numWidth / 2, y: midY), anchor: .center)
                     i = j
@@ -118,6 +139,15 @@ struct TabLineView: View {
                 }
             }
         }
+        .onTapGesture(coordinateSpace: .local) { location in
+            guard let onColumnTap else { return }
+            let naturalWidth = CGFloat(chars.count) * cw
+            let scale = naturalWidth > geo.size.width && geo.size.width > 0
+                ? geo.size.width / naturalWidth : 1.0
+            let col = Int(location.x / (cw * scale))
+            onColumnTap(col)
+        }
+        } // GeometryReader
         .frame(maxWidth: .infinity, minHeight: ch, maxHeight: ch)
     }
 }
