@@ -164,6 +164,7 @@ struct TabLineView: View {
         }
         } // GeometryReader
         .frame(maxWidth: .infinity, minHeight: ch, maxHeight: ch)
+        .allowsHitTesting(onColumnTap != nil)
     }
 }
 

@@ -22,6 +22,7 @@ struct PlayView: View {
 
     @State private var isEditingBeatDuration = false
     @State private var beatDurationInput = ""
+    @State private var beatEditCanceled = false
     @FocusState private var beatDurationFocused: Bool
 
     // Edit mode
@@ -597,7 +598,28 @@ struct PlayView: View {
                     .frame(width: 64)
                     .onSubmit { commitBeatDurationEdit() }
                     .onChange(of: beatDurationFocused) { _, focused in
-                        if !focused { commitBeatDurationEdit() }
+                        guard !focused else { return }
+                        if beatEditCanceled {
+                            beatEditCanceled = false
+                            isEditingBeatDuration = false
+                        } else {
+                            commitBeatDurationEdit()
+                        }
+                    }
+                    .toolbar {
+                        ToolbarItemGroup(placement: .keyboard) {
+                            Button("Cancel") {
+                                beatEditCanceled = true
+                                beatDurationFocused = false
+                            }
+                            .foregroundColor(Theme.textDim)
+                            Spacer()
+                            Button("Done") {
+                                commitBeatDurationEdit()
+                            }
+                            .fontWeight(.semibold)
+                            .foregroundColor(Theme.accent)
+                        }
                     }
             } else {
                 Text(durationMs.map { "\($0) ms" } ?? "-- ms")
