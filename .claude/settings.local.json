@@ -34,7 +34,8 @@
       "Bash(__NEW_LINE_7a4d90b2aaaf7160__ xcrun:*)",
       "Bash(UDID=\"A302CBFB-E3EC-42B4-ADF0-CFAA6471D7D1\" xcrun simctl bootstatus \"$UDID\")",
       "Bash(grep -E \"^.*error:.*$\")",
-      "Bash(grep -v \"^$\")"
+      "Bash(grep -v \"^$\")",
+      "Bash(find ~/Library/Developer/Xcode/DerivedData -name iChords.app -path */Debug-iphonesimulator/*)"
     ]
   }
 }
