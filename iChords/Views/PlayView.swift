@@ -22,8 +22,6 @@ struct PlayView: View {
 
     @State private var isEditingBeatDuration = false
     @State private var beatDurationInput = ""
-    @State private var beatEditCanceled = false
-    @FocusState private var beatDurationFocused: Bool
 
     // Edit mode
     @State private var isEditing = false
@@ -132,6 +130,7 @@ struct PlayView: View {
                 }
             }
             .coordinateSpace(name: "scroll")
+            .scrollDismissesKeyboard(.interactively)
             .onAppear {
                 scrollProxy = proxy
                 if engine.activeSongLineIndex > 0 {
@@ -579,34 +578,12 @@ struct PlayView: View {
 
             let durationMs = engine.currentBeatDurationMs
             if isEditingBeatDuration {
-                Button("Cancel") {
-                    beatEditCanceled = true
-                    beatDurationFocused = false
-                }
-                .font(.caption)
-                .foregroundColor(Theme.textDim)
-                TextField("ms", text: $beatDurationInput)
-                    .keyboardType(.numberPad)
-                    .focused($beatDurationFocused)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundColor(Theme.text)
-                    .multilineTextAlignment(.center)
-                    .frame(width: 56)
-                    .onSubmit { commitBeatDurationEdit() }
-                    .onChange(of: beatDurationFocused) { _, focused in
-                        guard !focused else { return }
-                        if beatEditCanceled {
-                            beatEditCanceled = false
-                            isEditingBeatDuration = false
-                        } else {
-                            commitBeatDurationEdit()
-                        }
-                    }
-                Button("Done") {
-                    commitBeatDurationEdit()
-                }
-                .font(.caption.weight(.semibold))
-                .foregroundColor(Theme.accent)
+                BeatDurationTextField(
+                    text: $beatDurationInput,
+                    onCommit: commitBeatDurationEdit,
+                    onCancel: { isEditingBeatDuration = false }
+                )
+                .frame(width: 64, height: 28)
             } else {
                 Button {
                     engine.deleteCurrentBeat()
@@ -624,7 +601,6 @@ struct PlayView: View {
                     .onTapGesture {
                         beatDurationInput = durationMs.map { "\($0)" } ?? ""
                         isEditingBeatDuration = true
-                        beatDurationFocused = true
                     }
             }
 

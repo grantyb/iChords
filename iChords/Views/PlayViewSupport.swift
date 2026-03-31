@@ -20,6 +20,81 @@ struct HeroHeightKey: PreferenceKey {
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
+// MARK: - Beat duration input field (number pad + inputAccessoryView with Done/Cancel)
+
+struct BeatDurationTextField: UIViewRepresentable {
+    @Binding var text: String
+    let onCommit: () -> Void
+    let onCancel: () -> Void
+
+    func makeUIView(context: Context) -> UITextField {
+        let tf = UITextField()
+        tf.keyboardType = .numberPad
+        tf.font = UIFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+        tf.textColor = UIColor(Theme.text)
+        tf.textAlignment = .center
+        tf.borderStyle = .none
+        tf.backgroundColor = .clear
+        tf.delegate = context.coordinator
+
+        let bar = UIToolbar()
+        bar.barStyle = .black
+        bar.tintColor = UIColor(Theme.accent)
+        bar.sizeToFit()
+        let cancelItem = UIBarButtonItem(title: "Cancel", style: .plain,
+                                         target: context.coordinator,
+                                         action: #selector(Coordinator.tappedCancel))
+        cancelItem.tintColor = UIColor(Theme.textDim)
+        let space = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
+        let doneItem = UIBarButtonItem(title: "Done", style: .done,
+                                       target: context.coordinator,
+                                       action: #selector(Coordinator.tappedDone))
+        bar.items = [cancelItem, space, doneItem]
+        tf.inputAccessoryView = bar
+
+        DispatchQueue.main.async { tf.becomeFirstResponder() }
+        return tf
+    }
+
+    func updateUIView(_ tf: UITextField, context: Context) {
+        context.coordinator.parent = self
+        if tf.text != text { tf.text = text }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    class Coordinator: NSObject, UITextFieldDelegate {
+        var parent: BeatDurationTextField
+        var finished = false  // set when Done or Cancel is pressed explicitly
+
+        init(_ parent: BeatDurationTextField) { self.parent = parent }
+
+        func textField(_ tf: UITextField, shouldChangeCharactersIn range: NSRange,
+                       replacementString string: String) -> Bool {
+            let current = tf.text ?? ""
+            if let r = Range(range, in: current) {
+                parent.text = current.replacingCharacters(in: r, with: string)
+            }
+            return true
+        }
+
+        // Keyboard dismissed by scrolling or tapping elsewhere → commit
+        func textFieldDidEndEditing(_ tf: UITextField) {
+            if !finished { parent.onCommit() }
+        }
+
+        @objc func tappedCancel() {
+            finished = true
+            parent.onCancel()
+        }
+
+        @objc func tappedDone() {
+            finished = true
+            parent.onCommit()
+        }
+    }
+}
+
 // MARK: - Stalled playback indicator
 
 struct StalledIndicator: View {
