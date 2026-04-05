@@ -13,6 +13,8 @@ xcodegen generate   # Regenerate Xcode project after editing project.yml
 
 Build and run via Xcode (iOS Simulator or device). The project targets **iOS 17.0+**, requires **Xcode 16+**, and uses **Swift 6.0** with strict concurrency enabled (`SWIFT_STRICT_CONCURRENCY: targeted`).
 
+To run the project, use applescript to tell XCode to use the Run command from the Project menu
+
 ## Architecture Overview
 
 **iChords** is a SwiftUI iPhone app for learning guitar chords. Users search Songsterr for songs, save them to a local library, and play along with synchronized chord display.
