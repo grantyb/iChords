@@ -27,7 +27,43 @@ func isTabGroup(_ text: String) -> Bool {
 @MainActor
 final class TextViewBridge: ObservableObject {
     weak var textView: UITextView?
-    func insert(_ text: String) { textView?.insertText(text) }
+
+    /// Inserts `[chord]` at the cursor, or replaces an existing `[…]` if the cursor is inside one.
+    func insert(_ chord: String) {
+        guard let tv = textView,
+              let selectedRange = tv.selectedTextRange else { return }
+
+        let text = tv.text ?? ""
+        let nsText = text as NSString
+        let cursor = tv.offset(from: tv.beginningOfDocument, to: selectedRange.start)
+
+        // Scan left for '[', stopping early if ']' is found first.
+        var openPos: Int? = nil
+        for i in stride(from: cursor - 1, through: 0, by: -1) {
+            let c = nsText.character(at: i)
+            if c == 93 { break }          // ']' — not inside a chord
+            if c == 91 { openPos = i; break }  // '['
+        }
+
+        // Scan right for ']', stopping early if '[' is found first.
+        var closePos: Int? = nil
+        if openPos != nil {
+            for i in cursor..<nsText.length {
+                let c = nsText.character(at: i)
+                if c == 91 { break }          // '[' — malformed / adjacent chord
+                if c == 93 { closePos = i; break }  // ']'
+            }
+        }
+
+        if let open = openPos, let close = closePos,
+           let start = tv.position(from: tv.beginningOfDocument, offset: open),
+           let end   = tv.position(from: tv.beginningOfDocument, offset: close + 1),
+           let range = tv.textRange(from: start, to: end) {
+            tv.replace(range, withText: "[\(chord)]")
+        } else {
+            tv.insertText("[\(chord)]")
+        }
+    }
 }
 
 // MARK: - UITextView wrapper for a single ChordPro line
@@ -94,7 +130,7 @@ struct LineEditorModal: View {
                         HStack(spacing: 6) {
                             ForEach(uniqueChords, id: \.self) { chord in
                                 Button {
-                                    bridge.insert("[\(chord)]")
+                                    bridge.insert(chord)
                                 } label: {
                                     Text(chord)
                                         .font(.system(.caption2, design: .monospaced).bold())
