@@ -5,8 +5,6 @@ import OSLog
 
 struct PlayView: View {
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.dismiss) private var dismiss
-
     @Environment(AppState.self) private var appState
 
     @Bindable var song: Song
@@ -22,6 +20,10 @@ struct PlayView: View {
 
     @State private var isEditingBeatDuration = false
     @State private var beatDurationInput = ""
+
+    // Countdown before play
+    @State private var countdownTask: Task<Void, Never>? = nil
+    @State private var countdownProgress: Double = 0
 
     // Edit mode
     @State private var isEditing = false
@@ -47,17 +49,7 @@ struct PlayView: View {
             }
         }
         .background(Theme.bg)
-        .navigationBarBackButtonHidden(true)
         .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button {
-                    appState.closeSong()
-                    dismiss()
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .foregroundColor(Theme.accent)
-                }
-            }
             ToolbarItem(placement: .principal) {
                 VStack(spacing: 1) {
                     Text(song.title)
@@ -96,8 +88,10 @@ struct PlayView: View {
         }
         .onDisappear {
             engine.pause()
-            appState.activeSongLineIndex = engine.activeSongLineIndex
-            appState.save()
+            countdownTask?.cancel()
+            countdownTask = nil
+            countdownProgress = 0
+            appState.closeSong()
             isEditing = false
         }
         .onChange(of: engine.activeSongLineIndex) { _, newIdx in
@@ -536,10 +530,31 @@ struct PlayView: View {
                 }
 
                 Button {
-                    engine.togglePlay()
-                    if engine.isPlaying && !sessionRecorded {
-                        sessionRecorded = true
-                        song.recordSession()
+                    if countdownTask != nil {
+                        countdownTask?.cancel()
+                        countdownTask = nil
+                        countdownProgress = 0
+                    } else if engine.isPlaying {
+                        engine.pause()
+                    } else {
+                        countdownProgress = 1.0
+                        countdownTask = Task {
+                            let steps = 60
+                            let stepNs = UInt64(2_000_000_000 / steps)
+                            for i in 1...steps {
+                                do { try await Task.sleep(nanoseconds: stepNs) } catch {
+                                    countdownProgress = 0
+                                    return
+                                }
+                                countdownProgress = 1.0 - Double(i) / Double(steps)
+                            }
+                            countdownTask = nil
+                            engine.play()
+                            if !sessionRecorded {
+                                sessionRecorded = true
+                                song.recordSession()
+                            }
+                        }
                     }
                 } label: {
                     let isStalled = engine.isPlaying && (engine.isRecording || engine.currentBeatDurationMs == nil)
@@ -618,6 +633,20 @@ struct PlayView: View {
         .padding(.bottom, 0)
         .background {
             Theme.surface.ignoresSafeArea(edges: .bottom)
+        }
+        .overlay {
+            if countdownProgress > 0 {
+                GeometryReader { geo in
+                    HStack(spacing: 0) {
+                        (engine.isRecording ? Color.red : Color.blue)
+                            .opacity(0.3)
+                            .frame(width: geo.size.width * countdownProgress)
+                        Spacer(minLength: 0)
+                    }
+                }
+                .ignoresSafeArea(edges: .bottom)
+                .allowsHitTesting(false)
+            }
         }
         .overlay(alignment: .top) {
             Rectangle().fill(Theme.surface2).frame(height: 1)

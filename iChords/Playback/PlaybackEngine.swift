@@ -198,24 +198,11 @@ final class PlaybackEngine {
 
         guard !isRecording else { return }
 
-        // Scan forward past beats with no positive duration (durationMs nil or 0).
-        while activeSongLineIndex < songLines.count {
-            let sl = songLines[activeSongLineIndex]
-            if activeBeatIndex < sl.beats.count {
-                let beat = sl.beats[activeBeatIndex]
-                if let dur = beat.durationMs, dur > 0 { break }
-                if activeBeatIndex < sl.beats.count - 1 {
-                    activeBeatIndex += 1
-                } else {
-                    activeSongLineIndex += 1
-                    activeBeatIndex = 0
-                }
-                elapsed = 0
-            } else {
-                activeSongLineIndex += 1
-                activeBeatIndex = 0
-                elapsed = 0
-            }
+        // Skip lines that have no beats at all.
+        while activeSongLineIndex < songLines.count && songLines[activeSongLineIndex].beats.isEmpty {
+            activeSongLineIndex += 1
+            activeBeatIndex = 0
+            elapsed = 0
         }
 
         guard activeSongLineIndex < songLines.count else { return }
@@ -223,7 +210,8 @@ final class PlaybackEngine {
         let sl = songLines[activeSongLineIndex]
         if activeBeatIndex >= sl.beats.count { activeBeatIndex = sl.beats.count - 1 }
         let beat = sl.beats[activeBeatIndex]
-        guard let durMs = beat.durationMs, durMs > 0 else { return }
+        let rawDur = beat.durationMs ?? 0
+        let durMs = rawDur > 0 ? rawDur : 2000
 
         guard elapsed >= Double(durMs) / 1000.0 else { return }
         elapsed = 0
