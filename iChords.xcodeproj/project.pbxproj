@@ -180,7 +180,7 @@
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
 					5B3A4DA0F69EC7A6A5665E60 = {
-						DevelopmentTeam = DKW9QGFSBH;
+						DevelopmentTeam = B35KKCQC55;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -376,7 +376,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = DKW9QGFSBH;
+				DEVELOPMENT_TEAM = B35KKCQC55;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
@@ -400,7 +400,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = DKW9QGFSBH;
+				DEVELOPMENT_TEAM = B35KKCQC55;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
