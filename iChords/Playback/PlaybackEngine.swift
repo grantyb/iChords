@@ -102,45 +102,38 @@ final class PlaybackEngine {
         elapsed = 0
     }
 
-    /// In recording mode: stamps the current beat's duration with elapsed time, then advances.
-    /// Returns true if the beat duration was updated (caller should persist songLines).
-    @discardableResult
-    func commitElapsedAndStepForward() -> Bool {
-        guard !songLines.isEmpty, activeSongLineIndex < songLines.count else { return false }
+    /// In recording mode: stamps the current beat's duration with elapsed time, then advances by a song beat.
+    func commitElapsedAndStepForward() {
+        guard !songLines.isEmpty, activeSongLineIndex < songLines.count else { return }
         let sl = songLines[activeSongLineIndex]
-        guard activeBeatIndex < sl.beats.count else { return false }
+        guard activeBeatIndex < sl.beats.count else { return }
         let ms = max(1, Int(elapsed * 1000))
         setCurrentBeatDuration(ms)
-        stepForward()
-        return true
+        if activeBeatIndex < sl.beats.count - 1 {
+            activeBeatIndex += 1
+        } else {
+            stepForward()
+        }
+        elapsed = 0
     }
 
     func stepForward() {
         guard !songLines.isEmpty else { return }
-        let sl = songLines[activeSongLineIndex]
-        if activeBeatIndex < sl.beats.count - 1 {
-            activeBeatIndex += 1
-        } else {
-            var next = activeSongLineIndex + 1
-            while next < songLines.count && songLines[next].beats.isEmpty { next += 1 }
-            guard next < songLines.count else { return }
-            activeSongLineIndex = next
-            activeBeatIndex = 0
-        }
+        var next = activeSongLineIndex + 1
+        while next < songLines.count && songLines[next].beats.isEmpty { next += 1 }
+        guard next < songLines.count else { return }
+        activeSongLineIndex = next
+        activeBeatIndex = 0
         elapsed = 0
     }
 
     func stepBack() {
         guard !songLines.isEmpty else { return }
-        if activeBeatIndex > 0 {
-            activeBeatIndex -= 1
-        } else {
-            var prev = activeSongLineIndex - 1
-            while prev >= 0 && songLines[prev].beats.isEmpty { prev -= 1 }
-            guard prev >= 0 else { return }
-            activeSongLineIndex = prev
-            activeBeatIndex = max(0, songLines[prev].beats.count - 1)
-        }
+        var prev = activeSongLineIndex - 1
+        while prev >= 0 && songLines[prev].beats.isEmpty { prev -= 1 }
+        guard prev >= 0 else { return }
+        activeSongLineIndex = prev
+        activeBeatIndex = 0
         elapsed = 0
     }
 
