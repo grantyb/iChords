@@ -15,18 +15,18 @@ final class PlaybackEngine {
     private var beatStartDate: Date = Date()
     private var playTask: Task<Void, Never>?
 
-    var currentBeatDurationMs: Int? {
+    var currentBeatDurationNs: Int? {
         guard activeSongLineIndex < songLines.count,
               activeBeatIndex < songLines[activeSongLineIndex].beats.count else { return nil }
-        return songLines[activeSongLineIndex].beats[activeBeatIndex].durationMs
+        return songLines[activeSongLineIndex].beats[activeBeatIndex].durationNs
     }
 
-    func setCurrentBeatDuration(_ ms: Int) {
+    func setCurrentBeatDurationNs(_ ns: Int) {
         guard activeSongLineIndex < songLines.count,
               activeBeatIndex < songLines[activeSongLineIndex].beats.count else { return }
         let sl = songLines[activeSongLineIndex]
         var beats = sl.beats
-        beats[activeBeatIndex] = SongBeat(index: beats[activeBeatIndex].index, durationMs: ms)
+        beats[activeBeatIndex] = SongBeat(index: beats[activeBeatIndex].index, durationNs: ns)
         songLines[activeSongLineIndex] = withBeats(beats, in: sl)
     }
 
@@ -79,8 +79,12 @@ final class PlaybackEngine {
         isPlaying = true
         beatStartDate = Date()
         playTask = Task {
+            // Absolute time the next beat-advance should fire.
+            // Using this instead of relative sleeps prevents overshoot from accumulating.
+            var nextFireDate = Date()
+
             while isPlaying && !isRecording && !Task.isCancelled {
-                // Play mode: sleep for the exact duration of the current beat.
+                // Skip lines with no beats.
                 while activeSongLineIndex < songLines.count && songLines[activeSongLineIndex].beats.isEmpty {
                     activeSongLineIndex += 1
                     activeBeatIndex = 0
@@ -89,13 +93,21 @@ final class PlaybackEngine {
 
                 let sl = songLines[activeSongLineIndex]
                 if activeBeatIndex >= sl.beats.count { activeBeatIndex = sl.beats.count - 1 }
-                let rawDur = sl.beats[activeBeatIndex].durationMs ?? 0
-                let durMs = rawDur > 0 ? rawDur : 2000
+                let rawDur = sl.beats[activeBeatIndex].durationNs ?? 0
+                let durNs = rawDur > 0 ? rawDur : 2_000_000_000
 
+                // Advance the absolute target by this beat's duration.
+                nextFireDate = nextFireDate.addingTimeInterval(Double(durNs) / 1_000_000_000)
                 beatStartDate = Date()
-                do {
-                    try await Task.sleep(nanoseconds: UInt64(durMs) * 1_000_000)
-                } catch { break }
+
+                // Sleep only for the remaining time to the target — any prior overshoot is
+                // automatically absorbed here, preventing drift from accumulating.
+                let remainingNs = nextFireDate.timeIntervalSinceNow * 1_000_000_000
+                if remainingNs > 0 {
+                    do {
+                        try await Task.sleep(nanoseconds: UInt64(remainingNs))
+                    } catch { break }
+                }
 
                 guard isPlaying && !isRecording else { continue }
 
@@ -133,8 +145,8 @@ final class PlaybackEngine {
         guard !songLines.isEmpty, activeSongLineIndex < songLines.count else { return }
         let sl = songLines[activeSongLineIndex]
         guard activeBeatIndex < sl.beats.count else { return }
-        let ms = max(1, Int(Date().timeIntervalSince(beatStartDate) * 1000))
-        setCurrentBeatDuration(ms)
+        let ns = max(1, Int(Date().timeIntervalSince(beatStartDate) * 1_000_000_000))
+        setCurrentBeatDurationNs(ns)
         if activeBeatIndex < sl.beats.count - 1 {
             activeBeatIndex += 1
         } else {
@@ -157,7 +169,9 @@ final class PlaybackEngine {
         guard !songLines.isEmpty else { return }
         var prev = activeSongLineIndex - 1
         while prev >= 0 && songLines[prev].beats.isEmpty { prev -= 1 }
-        guard prev >= 0 else { return }
+        if prev < 0 {
+            prev = songLines.indices.first { !songLines[$0].beats.isEmpty } ?? 0
+        }
         activeSongLineIndex = prev
         activeBeatIndex = 0
         restartPlayTask()

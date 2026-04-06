@@ -2,7 +2,7 @@ import Foundation
 
 struct SongBeat: Codable {
     let index: Int       // 0 = no chord highlighted; 1-based chord offset within this line
-    let durationMs: Int?
+    let durationNs: Int?
 }
 
 struct SongLine: Codable {

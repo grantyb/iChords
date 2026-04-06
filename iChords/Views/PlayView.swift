@@ -323,9 +323,9 @@ struct PlayView: View {
         let isTab = sl.kind == .tab
         let wholeLineBeat = sl.beats.first { $0.index == 0 }
         let hasWholeLineBeat = wholeLineBeat != nil
-        let wholeLineBeatColor: Color = wholeLineBeat?.durationMs == nil ? .red : .green
+        let wholeLineBeatColor: Color = wholeLineBeat?.durationNs == nil ? .red : .green
         let recordBeatDurations: [Int: Int?] = Dictionary(uniqueKeysWithValues: sl.beats.filter { $0.index > 0 }
-                .map { (sl.chordStartIndex + $0.index - 1, $0.durationMs) })
+                .map { (sl.chordStartIndex + $0.index - 1, $0.durationNs) })
 
         Group {
             if isTab {
@@ -334,7 +334,7 @@ struct PlayView: View {
                         return sl.beats.enumerated().compactMap { (beatArrayIdx, beat) -> TabBeatHighlight? in
                             guard beat.index > 0 else { return nil }
                             guard let range = SongLineBuilder.beatColumnRange(for: beat.index, in: sl, parsed: parsed) else { return nil }
-                            let color: Color = beat.durationMs != nil ? .green : .red
+                            let color: Color = beat.durationNs != nil ? .green : .red
                             let beatIsActive = isActive && beatArrayIdx == engine.activeBeatIndex
                             return TabBeatHighlight(range: range, color: color, isActive: beatIsActive)
                         }
@@ -557,7 +557,7 @@ struct PlayView: View {
                         }
                     }
                 } label: {
-                    let isStalled = engine.isPlaying && (engine.isRecording || engine.currentBeatDurationMs == nil)
+                    let isStalled = engine.isPlaying && (engine.isRecording || engine.currentBeatDurationNs == nil)
                     ZStack {
                         Circle()
                             .fill(engine.isPlaying ? Theme.surface2 : Theme.accent)
@@ -591,7 +591,7 @@ struct PlayView: View {
 
             Spacer()
 
-            let durationMs = engine.currentBeatDurationMs
+            let durationNs = engine.currentBeatDurationNs
             if isEditingBeatDuration {
                 BeatDurationTextField(
                     text: $beatDurationInput,
@@ -610,11 +610,11 @@ struct PlayView: View {
                         .foregroundColor(Theme.textDim)
                         .frame(width: 28, height: 28)
                 }
-                Text(durationMs.map { "\($0) ms" } ?? "-- ms")
+                Text(durationNs.map { "\($0 / 1_000_000) ms" } ?? "-- ms")
                     .font(.system(.caption, design: .monospaced))
                     .foregroundColor(Theme.textDim)
                     .onTapGesture {
-                        beatDurationInput = durationMs.map { "\($0)" } ?? ""
+                        beatDurationInput = durationNs.map { "\($0 / 1_000_000)" } ?? ""
                         isEditingBeatDuration = true
                     }
             }
@@ -658,7 +658,7 @@ struct PlayView: View {
     private func commitBeatDurationEdit() {
         isEditingBeatDuration = false
         if let ms = Int(beatDurationInput), ms >= 0 {
-            engine.setCurrentBeatDuration(ms)
+            engine.setCurrentBeatDurationNs(ms * 1_000_000)
             song.linesData = try? JSONEncoder().encode(engine.songLines)
         }
     }
@@ -686,8 +686,8 @@ struct PlayView: View {
                     ? result.lines[sl.parsedLineIndex].chunks.filter { $0.chord != nil }.count
                     : 0
                 beats = chordCount > 0
-                    ? (1...chordCount).map { SongBeat(index: $0, durationMs: 0) }
-                    : [SongBeat(index: 0, durationMs: 0)]
+                    ? (1...chordCount).map { SongBeat(index: $0, durationNs: 0) }
+                    : [SongBeat(index: 0, durationNs: 0)]
             }
             return SongLine(
                 kind: sl.kind,

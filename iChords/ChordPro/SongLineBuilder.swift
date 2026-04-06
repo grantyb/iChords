@@ -60,7 +60,7 @@ enum SongLineBuilder {
     /// Returns one `SongBeat` per tab column that has at least one non-dash character
     /// across all rows in the tab group. Falls back to a single index-0 beat if none found.
     static func tabBeats(for sl: SongLine, in parsed: ParsedSong) -> [SongBeat] {
-        guard sl.kind == .tab else { return [SongBeat(index: 0, durationMs: 0)] }
+        guard sl.kind == .tab else { return [SongBeat(index: 0, durationNs: 0)] }
 
         // Collect the body of each tab row (content after the first `|`, trailing `|` stripped).
         var bodies: [[Character]] = []
@@ -73,7 +73,7 @@ enum SongLineBuilder {
             bodies.append(Array(body))
         }
 
-        guard !bodies.isEmpty else { return [SongBeat(index: 0, durationMs: 0)] }
+        guard !bodies.isEmpty else { return [SongBeat(index: 0, durationNs: 0)] }
 
         let maxLen = bodies.map(\.count).max() ?? 0
         var beats: [SongBeat] = []
@@ -84,12 +84,12 @@ enum SongLineBuilder {
             let hasFret = bodies.contains { $0.count > pos && $0[pos] != "-" }
             if hasFret && prevWasDash {
                 beatIndex += 1
-                beats.append(SongBeat(index: beatIndex, durationMs: 0))
+                beats.append(SongBeat(index: beatIndex, durationNs: 0))
             }
             prevWasDash = !hasFret
         }
 
-        return beats.isEmpty ? [SongBeat(index: 0, durationMs: 0)] : beats
+        return beats.isEmpty ? [SongBeat(index: 0, durationNs: 0)] : beats
     }
 
     /// Returns the body-relative character-column range for the given 1-based beat index,
