@@ -34,7 +34,8 @@ final class EditModeController {
     func save(to song: Song, context: ModelContext) {
         let text = lines.map(\.text).joined(separator: "\n")
         song.chords = text
-        song.linesData = nil
+        // linesData is intentionally left as-is here; reloadParsedSong() will
+        // capture any recorded beats from it before clearing and rebuilding.
         ChordVersion.saveNewVersion(for: song, text: text, context: context)
     }
 

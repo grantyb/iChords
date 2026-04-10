@@ -664,7 +664,7 @@ struct PlayView: View {
     }
 
 
-    private func loadSong() {
+    private func loadSong(restoringBeats savedBeats: [Int: [SongBeat]] = [:]) {
         let parsed = ChordProParser.parse(song.chords)
         var result = parsed
         if result.artist == nil { result.artist = song.artist }
@@ -674,20 +674,31 @@ struct PlayView: View {
         var lines = song.ensureSongLines(for: result)
 
         // Ensure every line has at least one beat; for lines with chords, one beat per chord.
+        // Where a saved beat array exists with the same count, restore it to preserve recordings.
         var needsResave = false
         lines = lines.map { sl in
             guard sl.beats.isEmpty else { return sl }
             needsResave = true
             let beats: [SongBeat]
             if sl.kind == .tab {
-                beats = SongLineBuilder.tabBeats(for: sl, in: result)
+                let tabBeats = SongLineBuilder.tabBeats(for: sl, in: result)
+                if let saved = savedBeats[sl.parsedLineIndex], saved.count == tabBeats.count {
+                    beats = saved
+                } else {
+                    beats = tabBeats
+                }
             } else {
                 let chordCount = sl.parsedLineIndex < result.lines.count
                     ? result.lines[sl.parsedLineIndex].chunks.filter { $0.chord != nil }.count
                     : 0
-                beats = chordCount > 0
+                let defaultBeats = chordCount > 0
                     ? (1...chordCount).map { SongBeat(index: $0, durationNs: 0) }
                     : [SongBeat(index: 0, durationNs: 0)]
+                if let saved = savedBeats[sl.parsedLineIndex], saved.count == defaultBeats.count {
+                    beats = saved
+                } else {
+                    beats = defaultBeats
+                }
             }
             return SongLine(
                 kind: sl.kind,
@@ -723,8 +734,15 @@ struct PlayView: View {
 
     private func reloadParsedSong() {
         engine.reset()
+        // Capture any recorded beat timings before clearing, so we can restore
+        // them for lines whose structure hasn't changed after the edit.
+        var savedBeats: [Int: [SongBeat]] = [:]
+        if let data = song.linesData,
+           let oldLines = try? JSONDecoder().decode([SongLine].self, from: data) {
+            for sl in oldLines { savedBeats[sl.parsedLineIndex] = sl.beats }
+        }
         song.linesData = nil   // force rebuild of SongLines from updated chords
-        loadSong()
+        loadSong(restoringBeats: savedBeats)
     }
 
     // MARK: - Edit mode
